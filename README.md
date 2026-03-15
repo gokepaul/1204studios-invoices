@@ -1,20 +1,24 @@
 # 1204Studios — Invoice System
 
-Internal invoicing, payment tracking, and financial dashboard for 1204Studios.
+Internal invoicing, payment tracking, and financial dashboard.
 
 **Live URL:** https://invoices.1204studios.com
 
 ## Stack
-- Pure HTML/CSS/JS — no build step, no dependencies
-- Chart.js via CDN for dashboard charts
-- Deploys as a static site on Vercel
+Pure HTML/CSS/JS — no build step, no dependencies to install.
+Data persists via localStorage (browser storage). Upgrade to Supabase for cloud sync.
 
-## Deployment
-See deployment steps in the project documentation.
+## Files
+- `index.html` — entire application
+- `vercel.json` — Vercel routing config
 
-## Pages
-- **Dashboard** — revenue metrics and charts
-- **Invoices** — create, manage, download invoices
-- **Clients** — client database
-- **Accounts** — payment account management
-- **Settings** — studio config, T&C, presets, watermark
+## Deploy
+Push to GitHub, import on Vercel, add domain `invoices.1204studios.com`.
+DNS: CNAME `invoices` → `cname.vercel-dns.com`
+
+## First-time setup
+1. Go to **Settings → Studio Info** — fill in your studio details
+2. Go to **Settings → Service Presets** — update prices if needed  
+3. Go to **Accounts** — add your real bank account details
+4. Go to **Settings → Default Terms** — review and edit your T&C
+5. Create your first invoice
