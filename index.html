@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>1204Studios — Invoicing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080808;--bg2:#0f0f0f;--bg3:#161616;--bg4:#1d1d1d;
+  --bd:rgba(255,255,255,0.06);--bd2:rgba(255,255,255,0.11);--bd3:rgba(255,255,255,0.18);
+  --text:#f0ece6;--dim:rgba(240,236,230,0.55);--muted:rgba(240,236,230,0.28);
+  --pink:#ff2d78;--orange:#F26419;--cyan:#00d4e8;--green:#22c55e;
+  --red:#ef4444;--yellow:#eab308;--purple:#a855f7;
+  --font:-apple-system,'SF Pro Text',BlinkMacSystemFont,'Helvetica Neue',sans-serif;--display:-apple-system,'SF Pro Display',BlinkMacSystemFont,'Helvetica Neue',sans-serif;--mono:'DM Mono',monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased;overflow:hidden;}
+::-webkit-scrollbar{width:3px;height:3px;}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px;}
+button{cursor:pointer;font-family:var(--font);border:none;outline:none;background:none;}
+input,textarea,select{font-family:var(--font);outline:none;background:none;border:none;color:var(--text);}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes spin{to{transform:rotate(360deg);}}
+.fade{animation:fadeIn .25s ease both;}
+.shell{display:flex;height:100vh;overflow:hidden;}
+.sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--bd);display:flex;flex-direction:column;height:100vh;}
+.sb-logo{padding:24px 20px 20px;border-bottom:1px solid var(--bd);}
+
+.sb-sub{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.5px;}
+.sb-nav{padding:10px 8px;flex:1;}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;margin-bottom:2px;transition:all .15s;user-select:none;}
+.sb-item:hover{background:var(--bg4);color:var(--text);}
+.sb-item.active{background:rgba(255,45,120,.1);color:var(--pink);}
+.sb-item .icon{font-size:15px;width:20px;flex-shrink:0;}
+.sb-footer{padding:14px 16px;border-top:1px solid var(--bd);}
+.sb-ft{font-size:10.5px;color:var(--muted);}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;}
+.ph{padding:32px 40px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+.pt{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.02em;}
+.ps{font-size:13px;color:var(--muted);margin-top:4px;}
+.pb{padding:24px 40px 40px;}
+.mg{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:28px;}
+.mc{background:var(--bg2);border:1px solid var(--bd);border-radius:12px;padding:20px 18px;}
+.ml{font-size:10.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.mv{font-family:var(--display);font-size:26px;font-weight:700;letter-spacing:-.02em;}
+.ms{font-size:11.5px;color:var(--muted);margin-top:4px;}
+.card{background:var(--bg2);border:1px solid var(--bd);border-radius:12px;overflow:hidden;}
+.ch{padding:18px 22px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;}
+.ct{font-size:14px;font-weight:600;color:var(--text);}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:10px 16px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap;}
+.tbl td{padding:13px 16px;border-bottom:1px solid var(--bd);font-size:13px;color:var(--dim);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:rgba(255,255,255,.015);}
+.tbl td.s{color:var(--text);font-weight:600;}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:100px;font-size:10.5px;font-weight:700;letter-spacing:.3px;white-space:nowrap;}
+.b-draft{background:rgba(240,236,230,.07);color:var(--dim);border:1px solid var(--bd2);}
+.b-sent{background:rgba(0,212,232,.1);color:var(--cyan);border:1px solid rgba(0,212,232,.25);}
+.b-deposit{background:rgba(234,179,8,.1);color:var(--yellow);border:1px solid rgba(234,179,8,.25);}
+.b-partial{background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.25);}
+.b-paid{background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.25);}
+.b-overdue{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25);}
+.b-cancelled{background:rgba(240,236,230,.05);color:var(--muted);border:1px solid var(--bd);}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;transition:all .15s;cursor:pointer;}
+.btn-p{background:var(--pink);color:#fff;border:1px solid var(--pink);}
+.btn-p:hover{opacity:.88;}
+.btn-g{background:rgba(255,255,255,.05);color:var(--dim);border:1px solid var(--bd2);}
+.btn-g:hover{background:rgba(255,255,255,.08);color:var(--text);}
+.btn-s{padding:6px 13px;font-size:12px;border-radius:6px;}
+.btn-xs{padding:4px 9px;font-size:11px;border-radius:5px;}
+.btn-d{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2);}
+.btn-ok{background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.2);}
+.btn-dl{background:rgba(0,212,232,.08);color:var(--cyan);border:1px solid rgba(0,212,232,.2);}
+.btn-dl:hover{background:rgba(0,212,232,.15);}
+.fg{margin-bottom:18px;}
+.fl{font-size:10.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:7px;}
+.fi{width:100%;background:var(--bg3);border:1px solid var(--bd2);border-radius:8px;padding:10px 13px;font-size:13.5px;color:var(--text);transition:border-color .15s;}
+.fi:focus{border-color:var(--pink);}
+.fi::placeholder{color:var(--muted);}
+.fi option{background:var(--bg3);}
+.fr{display:grid;gap:16px;}
+.fr.c2{grid-template-columns:1fr 1fr;}
+.fr.c3{grid-template-columns:1fr 1fr 1fr;}
+.fr.c4{grid-template-columns:1fr 1fr 1fr 1fr;}
+textarea.fi{resize:vertical;min-height:80px;line-height:1.6;}
+.fst{font-family:var(--display);font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--bd);}
+.li-hdr{display:grid;grid-template-columns:1fr 90px 130px 110px 40px;background:var(--bg3);}
+.li-hdr div{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--bd);}
+.li-row{display:grid;grid-template-columns:1fr 90px 130px 110px 40px;border-bottom:1px solid var(--bd);}
+.li-row:last-child{border-bottom:none;}
+.li-cell{padding:6px 8px;display:flex;align-items:center;}
+.li-cell input{width:100%;background:transparent;padding:6px 4px;font-size:13px;color:var(--text);}
+.li-cell input::placeholder{color:var(--muted);}
+.li-del{cursor:pointer;color:var(--muted);font-size:18px;display:flex;align-items:center;justify-content:center;width:100%;height:100%;}
+.li-del:hover{color:var(--red);}
+.li-tot{text-align:right;padding:16px 18px;background:var(--bg3);border-top:1px solid var(--bd);}
+.lt-row{display:flex;justify-content:space-between;font-size:13px;color:var(--dim);margin-bottom:6px;}
+.lt-fin{font-size:16px;font-weight:700;color:var(--text);margin-top:8px;padding-top:8px;border-top:1px solid var(--bd2);}
+.mb{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal{background:var(--bg2);border:1px solid var(--bd2);border-radius:16px;width:100%;max-width:640px;max-height:90vh;display:flex;flex-direction:column;animation:fadeIn .2s ease;}
+.mxl{max-width:1060px;}
+.mh{padding:20px 24px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.mt{font-family:var(--display);font-size:16px;font-weight:700;}
+.mbody{padding:24px;overflow-y:auto;flex:1;}
+.mf{padding:16px 24px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;}
+.xbtn{width:30px;height:30px;border-radius:6px;background:var(--bg4);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:16px;cursor:pointer;}
+.xbtn:hover{color:var(--text);}
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px;}
+.sw{position:relative;flex:1;min-width:200px;}
+.sw input{width:100%;background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;padding:9px 13px 9px 36px;font-size:13px;color:var(--text);}
+.sw input::placeholder{color:var(--muted);}
+.sw input:focus{border-color:var(--pink);outline:none;}
+.si{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;}
+.fs{background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;padding:9px 13px;font-size:13px;color:var(--dim);cursor:pointer;min-width:130px;}
+.fs:focus{outline:none;border-color:var(--pink);}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;}
+.cc{background:var(--bg2);border:1px solid var(--bd);border-radius:12px;padding:20px;}
+.cc-t{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.cc-s{font-size:11.5px;color:var(--muted);margin-bottom:16px;}
+.divider{height:1px;background:var(--bd);margin:20px 0;}
+.empty{text-align:center;padding:60px 20px;color:var(--muted);}
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);color:var(--dim);}
+.mono{font-family:var(--mono);font-size:12px;}
+.acts{display:flex;gap:6px;align-items:center;}
+.ib{width:30px;height:30px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;cursor:pointer;transition:all .15s;}
+.ib:hover{background:rgba(255,255,255,.08);color:var(--text);}
+.pb-bar{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;}
+.pb-fill{height:100%;border-radius:2px;transition:width .3s;}
+.notif{position:fixed;bottom:24px;right:24px;z-index:500;background:var(--bg3);border:1px solid var(--bd2);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:fadeIn .2s ease;box-shadow:0 8px 32px rgba(0,0,0,.4);}
+.notif.ok{border-color:rgba(34,197,94,.3);color:var(--green);}
+.notif.err{border-color:rgba(239,68,68,.3);color:var(--red);}
+.up-zone{border:1.5px dashed var(--bd2);border-radius:10px;padding:36px;text-align:center;cursor:pointer;}
+.up-zone:hover{border-color:var(--pink);background:rgba(255,45,120,.04);}
+.sg{display:grid;grid-template-columns:200px 1fr;gap:32px;}
+.sn-item{padding:8px 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;margin-bottom:2px;}
+.sn-item:hover{background:var(--bg3);color:var(--text);}
+.sn-item.active{background:rgba(255,45,120,.08);color:var(--pink);}
+</style>
+</head>
+<body>
+<div class="shell" id="app"></div>
+<script>
+const S={
+  page:'dashboard',stab:'studio',notif:null,ntimer:null,
+  search:'',fstatus:'all',fcat:'all',fperiod:'year',
+  modal:null,editing:null,viewing:null,inv_form:null,
+  invoices:[
+    {id:'INV-2026-001',client:'Tunde Afolabi',company:'Greenleaf Environmental',email:'hello@greenleaf.ng',phone:'+234 801 234 5678',address:'14 Bourdillon Rd, Ikoyi, Lagos',project:'Brand Identity System',category:'Brand Design',desc:'Full brand identity including logo, colour system, typography and brand guidelines.',date:'2026-01-15',due:'2026-01-30',currency:'NGN',items:[{d:'Brand Strategy',q:1,p:350000},{d:'Logo Design',q:1,p:450000},{d:'Brand Guidelines',q:1,p:200000}],discount:0,tax:7.5,status:'paid',payments:[{date:'2026-01-20',amount:500000,method:'Bank Transfer',ref:'GNL-001'},{date:'2026-01-31',amount:561250,method:'Bank Transfer',ref:'GNL-002'}],account:'ngn-gtbank',notes:'',terms:true},
+    {id:'INV-2026-002',client:'Amara Okafor',company:'Stanbic IBTC Bank PLC',email:'marketing@stanbic.com',phone:'+234 802 345 6789',address:'I.B.T.C. Place, Walter Carrington Crescent, VI, Lagos',project:'Event Engagement Campaign',category:'Marketing Campaigns',desc:'Comprehensive marketing campaign for the FUZE Youth Engagement Programme.',date:'2026-02-01',due:'2026-02-15',currency:'NGN',items:[{d:'Campaign Strategy',q:1,p:750000},{d:'Creative Direction',q:1,p:600000},{d:'Social Media Assets',q:20,p:35000},{d:'Event Coverage',q:2,p:150000}],discount:5,tax:0,status:'partial',payments:[{date:'2026-02-05',amount:1000000,method:'Bank Transfer',ref:'STB-001'}],account:'ngn-gtbank',notes:'50% deposit received. Balance due end of month.',terms:true},
+    {id:'INV-2026-003',client:'Chidinma Eze',company:'3 Sisters Properties Ltd',email:'admin@3sisters.ng',phone:'+234 803 456 7890',address:'5 Akin Adesola St, Victoria Island, Lagos',project:'Corporate Brochure & Print',category:'Print Media',desc:'High-quality A4 corporate brochure for property listings, 500 print run.',date:'2026-02-10',due:'2026-02-25',currency:'NGN',items:[{d:'Brochure Design (12pp)',q:1,p:280000},{d:'Print Production (500 units)',q:500,p:2500}],discount:0,tax:7.5,status:'sent',payments:[],account:'ngn-gtbank',notes:'',terms:true},
+    {id:'INV-2026-004',client:'Kolade Adeyemi',company:'Individual',email:'kolade@email.com',phone:'+234 804 567 8901',address:'Lekki Phase 1, Lagos',project:'Design Tutoring Programme',category:'Design & Web Tutoring',desc:'12-week design fundamentals course — graphic design, Figma, Adobe Suite.',date:'2026-02-20',due:'2026-03-05',currency:'NGN',items:[{d:'Design Fundamentals (12 weeks)',q:12,p:45000},{d:'Software License Setup',q:1,p:15000}],discount:10,tax:0,status:'overdue',payments:[],account:'ngn-gtbank',notes:'',terms:true},
+    {id:'INV-2026-005',client:'Babatunde Lagos',company:'TechNova Ltd',email:'ceo@technova.africa',phone:'+234 805 678 9012',address:'Yaba Tech Hub, Lagos',project:'Website Design & Development',category:'Brand Design',desc:'Complete website design system for fintech startup. 8-page responsive site.',date:'2026-03-01',due:'2026-03-20',currency:'USD',items:[{d:'UX Research & Wireframes',q:1,p:800},{d:'Visual Design',q:1,p:1200},{d:'Design System',q:1,p:600}],discount:0,tax:0,status:'deposit',payments:[{date:'2026-03-03',amount:1300,method:'Stripe',ref:'pi_1234'}],account:'usd-wise',notes:'50% deposit received. Balance on delivery.',terms:true},
+    {id:'INV-2026-006',client:'Ngozi Nwosu',company:'Afrofusion Restaurant Ltd',email:'ops@afrofusion.ng',phone:'+234 806 789 0123',address:'Wuse 2, Abuja',project:'Logo & Brand Identity',category:'Brand Design',desc:'Minimal restaurant brand identity — logo, menu design, packaging concepts.',date:'2026-03-05',due:'2026-03-19',currency:'NGN',items:[{d:'Logo Design',q:1,p:180000},{d:'Menu Layout (2 variants)',q:2,p:60000},{d:'Packaging Concept',q:1,p:95000}],discount:0,tax:7.5,status:'draft',payments:[],account:'ngn-gtbank',notes:'',terms:false},
+  ],
+  clients:[
+    {id:'c1',name:'Greenleaf Environmental',contact:'Tunde Afolabi',email:'hello@greenleaf.ng',phone:'+234 801 234 5678',address:'14 Bourdillon Rd, Ikoyi, Lagos'},
+    {id:'c2',name:'Stanbic IBTC Bank PLC',contact:'Amara Okafor',email:'marketing@stanbic.com',phone:'+234 802 345 6789',address:'I.B.T.C. Place, Victoria Island, Lagos'},
+    {id:'c3',name:'3 Sisters Properties Ltd',contact:'Chidinma Eze',email:'admin@3sisters.ng',phone:'+234 803 456 7890',address:'5 Akin Adesola St, Victoria Island, Lagos'},
+    {id:'c4',name:'TechNova Ltd',contact:'Babatunde Lagos',email:'ceo@technova.africa',phone:'+234 805 678 9012',address:'Yaba Tech Hub, Lagos'},
+    {id:'c5',name:'Afrofusion Restaurant Ltd',contact:'Ngozi Nwosu',email:'ops@afrofusion.ng',phone:'+234 806 789 0123',address:'Wuse 2, Abuja'},
+  ],
+  accounts:[
+    {id:'ngn-gtbank',label:'NGN — GTBank',bank:'Guaranty Trust Bank',aname:'1204 Studios Nigeria Ltd',anum:'0123456789',swift:'GTBINGLA',currency:'NGN',instr:'Please include invoice number as payment reference.'},
+    {id:'usd-wise',label:'USD — Wise',bank:'Wise (TransferWise)',aname:'1204 Studios',anum:'ACH: 026073150 / Acct: 8901234567',swift:'TRWIGB22',currency:'USD',instr:'USD transfers via Wise. Include invoice number in reference.'},
+    {id:'gbp-wise',label:'GBP — Wise',bank:'Wise (TransferWise)',aname:'1204 Studios',anum:'Sort: 23-14-70 / Acct: 01234567',swift:'TRWIGB22',currency:'GBP',instr:'GBP transfers via Wise. Include invoice number in reference.'},
+  ],
+  presets:[
+    {name:'Brand Identity Design',price:850000,cur:'NGN'},
+    {name:'Logo Design',price:280000,cur:'NGN'},
+    {name:'Marketing Campaign Creative',price:600000,cur:'NGN'},
+    {name:'Website Design',price:450000,cur:'NGN'},
+    {name:'Corporate Brochure',price:180000,cur:'NGN'},
+    {name:'Design Tutoring (per week)',price:45000,cur:'NGN'},
+    {name:'Creative Consulting',price:150000,cur:'NGN'},
+    {name:'Workshop Facilitation',price:250000,cur:'NGN'},
+  ],
+  cfg:{
+    name:'1204Studios',tag:'Brand Strategy • Design • Development',
+    addr:'22 Glover Rd, Ikoyi, Lagos',email:'hello@1204studios.com',
+    web:'www.1204studios.com',phone:'+234 903 558 3476',rc:'RC 234234',
+    footer:'1204Studios\nBrand Strategy • Design • Development\nLagos, Nigeria\nhello@1204studios.com',
+    terms:`1. PAYMENT TERMS\nAll invoices are due on the date specified. A 50% deposit is required before commencement of any project.\n\n2. LATE PAYMENT\nAccounts overdue by more than 7 days will incur a penalty of 5% per month on the outstanding balance.\n\n3. INTELLECTUAL PROPERTY\nAll intellectual property rights in creative work remain with 1204Studios until full payment is received, at which point ownership transfers to the client.\n\n4. REVISIONS\nEach project includes up to 3 rounds of revisions. Additional revisions will be quoted separately.\n\n5. SCOPE\nThis invoice covers only the specific deliverables outlined. Any additional scope will be subject to a separate quotation.\n\n6. TERMINATION\nEither party may terminate this agreement with 7 days written notice. Any work completed to date will be invoiced at the applicable pro-rata rate.\n\n7. GOVERNING LAW\nThis agreement is governed by the laws of the Federal Republic of Nigeria.`,
+    wmOpacity:0.08,color:'#ff2d78',
+  }
+};
+
+// ── helpers ──
+const SYM={NGN:'₦',USD:'$',GBP:'£'};
+function fc(n,cur){return (SYM[cur]||cur)+Number(n).toLocaleString('en-NG',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function fd(d){return d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'—';}
+function nextId(){return 'INV-2026-'+String(S.invoices.length+1).padStart(3,'0');}
+function calc(inv){
+  const sub=(inv.items||[]).reduce((s,i)=>s+(+i.q||0)*(+i.p||0),0);
+  const da=sub*((+inv.discount||0)/100),ad=sub-da;
+  const ta=ad*((+inv.tax||0)/100),tot=ad+ta;
+  const paid=(inv.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
+  return{sub,da,ta,tot,paid,rem:Math.max(0,tot-paid)};
+}
+function sbadge(s){
+  const m={draft:'Draft',sent:'Sent',deposit:'Deposit Req.',partial:'Partially Paid',paid:'Fully Paid',overdue:'Overdue',cancelled:'Cancelled'};
+  const c={draft:'b-draft',sent:'b-sent',deposit:'b-deposit',partial:'b-partial',paid:'b-paid',overdue:'b-overdue',cancelled:'b-cancelled'};
+  return `<span class="badge ${c[s]||'b-draft'}">${m[s]||s}</span>`;
+}
+function notify(msg,type='ok'){
+  if(S.ntimer)clearTimeout(S.ntimer);
+  S.notif={msg,type};render();
+  S.ntimer=setTimeout(()=>{S.notif=null;render();},3000);
+}
+function nav(p){S.page=p;S.search='';render();}
+function closeModal(){S.modal=null;S.editing=null;S.viewing=null;render();}
+
+// ── dashboard ──
+function rDash(){
+  const invs=S.invoices;
+  const exp=invs.filter(i=>i.status!=='cancelled'&&i.status!=='draft').reduce((s,i)=>s+calc(i).tot,0);
+  const col=invs.reduce((s,i)=>s+calc(i).paid,0);
+  const out=invs.filter(i=>['sent','deposit','partial'].includes(i.status));
+  const over=invs.filter(i=>i.status==='overdue');
+  const pct=Math.round(col/Math.max(1,exp)*100);
+  return `
+<div class="ph fade">
+  <div><div class="pt">Dashboard</div><div class="ps">Financial overview · ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'})}</div></div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <select class="fs" onchange="S.fperiod=this.value;render()">
+      <option value="month">This Month</option><option value="quarter">This Quarter</option><option value="year" selected>This Year</option>
+    </select>
+    <button class="btn btn-p" onclick="openNew()">+ New Invoice</button>
+  </div>
+</div>
+<div class="pb fade">
+  <div class="mg">
+    <div class="mc"><div class="ml">Expected Revenue</div><div class="mv">${fc(exp,'NGN')}</div><div class="ms">${invs.filter(i=>i.status!=='cancelled'&&i.status!=='draft').length} active invoices</div></div>
+    <div class="mc"><div class="ml">Collected</div><div class="mv" style="color:var(--green)">${fc(col,'NGN')}</div><div class="ms">${pct}% of expected</div></div>
+    <div class="mc"><div class="ml">Receivables</div><div class="mv" style="color:var(--orange)">${fc(exp-col,'NGN')}</div><div class="ms">${out.length} outstanding</div></div>
+    <div class="mc"><div class="ml">Overdue</div><div class="mv" style="color:var(--red)">${over.length}</div><div class="ms">invoices past due</div></div>
+    <div class="mc"><div class="ml">Total Invoices</div><div class="mv">${invs.length}</div><div class="ms">${invs.filter(i=>i.status==='draft').length} drafts</div></div>
+    <div class="mc">
+      <div class="ml">Collection Rate</div>
+      <div class="mv" style="color:var(--cyan)">${pct}%</div>
+      <div class="ms" style="margin-bottom:6px">of billed revenue</div>
+      <div class="pb-bar"><div class="pb-fill" style="width:${pct}%;background:var(--cyan)"></div></div>
+    </div>
+  </div>
+  <div class="cg">
+    <div class="cc">
+      <div class="cc-t">Monthly Revenue 2026</div>
+      <div class="cc-s">Expected vs Collected (₦000s)</div>
+      <div style="position:relative;height:200px"><canvas id="cR"></canvas></div>
+    </div>
+    <div class="cc">
+      <div class="cc-t">Invoice Status</div>
+      <div class="cc-s">Distribution by status</div>
+      <div style="display:flex;align-items:center;gap:20px;height:200px">
+        <div style="flex:1;position:relative;height:180px"><canvas id="cS"></canvas></div>
+        <div style="flex-shrink:0">
+          ${[['paid','#22c55e','Paid'],['partial','#a855f7','Partial'],['sent','#00d4e8','Sent'],['deposit','#eab308','Deposit'],['overdue','#ef4444','Overdue'],['draft','#555','Draft']].map(([s,c,l])=>{
+            const cnt=invs.filter(i=>i.status===s).length;
+            return cnt>0?`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:11px;color:var(--dim)"><span style="width:10px;height:10px;border-radius:2px;background:${c};flex-shrink:0;display:inline-block"></span>${l} (${cnt})</div>`:'';
+          }).join('')}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ct">Recent Invoices</div><button class="btn btn-g btn-s" onclick="nav('invoices')">View All →</button></div>
+    <table class="tbl"><thead><tr><th>Invoice</th><th>Client</th><th>Category</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>
+    ${invs.slice(0,5).map(inv=>{const c2=calc(inv);return`<tr>
+      <td class="mono s">${inv.id}</td><td class="s">${inv.client}</td>
+      <td><span class="tag">${inv.category}</span></td>
+      <td class="s">${fc(c2.tot,inv.currency)}</td>
+      <td>${fd(inv.due)}</td><td>${sbadge(inv.status)}</td>
+      <td><div class="acts">
+        <div class="ib" onclick="viewInv('${inv.id}')" title="View">👁</div>
+        <div class="ib" onclick="dlPDF('${inv.id}')" title="PDF">⬇</div>
+      </div></td>
+    </tr>`;}).join('')}
+    </tbody></table>
+  </div>
+</div>`;
+}
+
+// ── invoices ──
+function rInvoices(){
+  let f=S.invoices;
+  if(S.search)f=f.filter(i=>i.id.toLowerCase().includes(S.search.toLowerCase())||i.client.toLowerCase().includes(S.search.toLowerCase())||i.company.toLowerCase().includes(S.search.toLowerCase()));
+  if(S.fstatus!=='all')f=f.filter(i=>i.status===S.fstatus);
+  if(S.fcat!=='all')f=f.filter(i=>i.category===S.fcat);
+  return `
+<div class="ph fade">
+  <div><div class="pt">Invoices</div><div class="ps">${S.invoices.length} total · ${f.length} shown</div></div>
+  <button class="btn btn-p" onclick="openNew()">+ New Invoice</button>
+</div>
+<div class="pb fade">
+  <div class="filters">
+    <div class="sw"><span class="si">🔍</span><input placeholder="Search by client, invoice #…" value="${S.search}" oninput="S.search=this.value;render()"/></div>
+    <select class="fs" onchange="S.fstatus=this.value;render()">
+      <option value="all">All Statuses</option><option value="draft">Draft</option><option value="sent">Sent</option>
+      <option value="deposit">Deposit Required</option><option value="partial">Partially Paid</option>
+      <option value="paid">Fully Paid</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option>
+    </select>
+    <select class="fs" onchange="S.fcat=this.value;render()">
+      <option value="all">All Categories</option><option>Brand Design</option><option>Marketing Campaigns</option>
+      <option>Print Media</option><option>Design &amp; Web Tutoring</option>
+    </select>
+    <button class="btn btn-dl btn-s" onclick="dlAllInvoices(f)" style="white-space:nowrap">⬇ Download All (${f.length})</button>
+  </div>
+  <div class="card">
+    ${f.length===0?`<div class="empty"><div style="font-size:36px;margin-bottom:12px">🗂</div><div style="font-size:14px">No invoices match your filters</div></div>`:`
+    <table class="tbl"><thead><tr><th>Invoice #</th><th>Client</th><th>Category</th><th>Date</th><th>Due</th><th>Total</th><th>Paid</th><th>Status</th><th></th></tr></thead><tbody>
+    ${f.map(inv=>{
+      const c2=calc(inv);const pct2=Math.round(c2.paid/Math.max(1,c2.tot)*100);
+      return`<tr>
+        <td class="mono s">${inv.id}</td>
+        <td><div style="font-weight:600;color:var(--text)">${inv.client}</div><div style="font-size:11.5px;color:var(--muted)">${inv.project}</div></td>
+        <td><span class="tag">${inv.category}</span></td>
+        <td>${fd(inv.date)}</td><td>${fd(inv.due)}</td>
+        <td class="s">${fc(c2.tot,inv.currency)}</td>
+        <td><div style="font-size:12px;color:var(--green)">${fc(c2.paid,inv.currency)}</div>
+          ${c2.paid>0?`<div class="pb-bar" style="margin-top:4px;width:70px"><div class="pb-fill" style="width:${pct2}%;background:var(--green)"></div></div>`:''}</td>
+        <td>${sbadge(inv.status)}</td>
+        <td><div class="acts">
+          <div class="ib" onclick="viewInv('${inv.id}')" title="View">👁</div>
+          <div class="ib" onclick="editInv('${inv.id}')" title="Edit">✏️</div>
+          <div class="ib" onclick="recPay('${inv.id}')" title="Record Payment">💳</div>
+          <button class="btn btn-dl btn-xs" onclick="dlPDF('${inv.id}')" title="Download Invoice HTML">⬇ Download</button>
+          <div class="ib" onclick="dupInv('${inv.id}')" title="Duplicate">⧉</div>
+        </div></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`}
+  </div>
+</div>`;
+}
+
+// ── clients ──
+function rClients(){
+  let f=S.clients;
+  if(S.search)f=f.filter(c=>c.name.toLowerCase().includes(S.search.toLowerCase())||c.contact.toLowerCase().includes(S.search.toLowerCase())||c.email.toLowerCase().includes(S.search.toLowerCase()));
+  return`
+<div class="ph fade">
+  <div><div class="pt">Clients</div><div class="ps">${S.clients.length} clients</div></div>
+  <button class="btn btn-p" onclick="S.modal='addclient';render()">+ Add Client</button>
+</div>
+<div class="pb fade">
+  <div class="filters"><div class="sw"><span class="si">🔍</span><input placeholder="Search clients…" value="${S.search}" oninput="S.search=this.value;render()"/></div></div>
+  <div class="card"><table class="tbl"><thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Invoices</th><th>Total Billed</th><th></th></tr></thead><tbody>
+  ${f.map(c=>{
+    const ci=S.invoices.filter(i=>i.email===c.email);
+    const bil=ci.reduce((s,i)=>s+calc(i).tot,0);
+    return`<tr>
+      <td class="s">${c.name}</td><td>${c.contact}</td>
+      <td style="color:var(--cyan)">${c.email}</td><td>${c.phone}</td>
+      <td>${ci.length}</td><td class="s">${bil>0?fc(bil,'NGN'):'—'}</td>
+      <td><div class="acts">
+        <button class="btn btn-g btn-xs" onclick="openNewForClient('${c.email}')">New Invoice</button>
+      </div></td>
+    </tr>`;
+  }).join('')}
+  </tbody></table></div>
+</div>`;
+}
+
+// ── accounts ──
+function rAccounts(){
+  return`
+<div class="ph fade">
+  <div><div class="pt">Payment Accounts</div><div class="ps">Manage bank accounts and payment methods</div></div>
+  <button class="btn btn-p" onclick="S.modal='addacc';render()">+ Add Account</button>
+</div>
+<div class="pb fade">
+  <div style="display:grid;gap:14px">
+  ${S.accounts.map(a=>`
+  <div class="card">
+    <div class="ch">
+      <div><div class="ct">${a.label}</div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">${a.currency} · ${a.bank}</div></div>
+    </div>
+    <div style="padding:18px 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div><div class="fl" style="margin-bottom:5px">Account Name</div><div style="font-size:13.5px;font-weight:600;color:var(--text)">${a.aname}</div></div>
+      <div><div class="fl" style="margin-bottom:5px">Account / Details</div><div style="font-family:var(--mono);font-size:12px;color:var(--cyan)">${a.anum}</div></div>
+      <div><div class="fl" style="margin-bottom:5px">SWIFT / Sort Code</div><div style="font-family:var(--mono);font-size:12px;color:var(--dim)">${a.swift}</div></div>
+    </div>
+    <div style="padding:0 22px 18px"><div class="fl" style="margin-bottom:5px">Payment Instructions</div><div style="font-size:13px;color:var(--dim)">${a.instr}</div></div>
+  </div>`).join('')}
+  </div>
+</div>`;
+}
+
+// ── settings ──
+function rSettings(){
+  const t=S.stab;
+  const tabs={studio:'Studio Info',terms:'Default Terms',presets:'Service Presets',watermark:'Watermark & PDF'};
+  return`
+<div class="ph fade"><div><div class="pt">Settings</div><div class="ps">Studio configuration and defaults</div></div></div>
+<div class="pb fade">
+  <div class="sg">
+    <div>${Object.entries(tabs).map(([k,v])=>`<div class="sn-item ${t===k?'active':''}" onclick="S.stab='${k}';render()">${v}</div>`).join('')}</div>
+    <div>${t==='studio'?rSStudio():t==='terms'?rSTerms():t==='presets'?rSPresets():rSWm()}</div>
+  </div>
+</div>`;
+}
+function rSStudio(){const c=S.cfg;return`
+<div class="fst">Studio Information</div>
+<div class="fr c2">
+  <div class="fg"><label class="fl">Studio Name</label><input class="fi" value="${c.name}" onchange="S.cfg.name=this.value"/></div>
+  <div class="fg"><label class="fl">Tagline</label><input class="fi" value="${c.tag}" onchange="S.cfg.tag=this.value"/></div>
+  <div class="fg"><label class="fl">Email</label><input class="fi" type="email" value="${c.email}" onchange="S.cfg.email=this.value"/></div>
+  <div class="fg"><label class="fl">Phone</label><input class="fi" value="${c.phone}" onchange="S.cfg.phone=this.value"/></div>
+  <div class="fg"><label class="fl">Website</label><input class="fi" value="${c.web}" onchange="S.cfg.web=this.value"/></div>
+  <div class="fg"><label class="fl">RC Number</label><input class="fi" value="${c.rc}" onchange="S.cfg.rc=this.value"/></div>
+</div>
+<div class="fg"><label class="fl">Address</label><input class="fi" value="${c.addr}" onchange="S.cfg.addr=this.value"/></div>
+<div class="fg"><label class="fl">Invoice Accent Colour</label>
+  <div style="display:flex;gap:10px;align-items:center">
+    <input type="color" value="${c.color}" onchange="S.cfg.color=this.value" style="width:44px;height:36px;border-radius:6px;border:1px solid var(--bd2);cursor:pointer;background:none;padding:2px"/>
+    <input class="fi" value="${c.color}" style="width:130px" onchange="S.cfg.color=this.value"/>
+  </div>
+</div>
+<button class="btn btn-p" onclick="notify('Settings saved')">Save Changes</button>`;}
+function rSTerms(){return`
+<div class="fst">Default Terms & Conditions</div>
+<div class="fg"><label class="fl">T&C Template</label>
+  <textarea class="fi" rows="18" onchange="S.cfg.terms=this.value">${S.cfg.terms}</textarea></div>
+<button class="btn btn-p" onclick="notify('Terms saved')">Save Terms</button>`;}
+function rSPresets(){return`
+<div class="fst">Service Presets</div>
+<div style="display:grid;gap:10px;margin-bottom:20px">
+  ${S.presets.map((p,i)=>`
+  <div style="display:grid;grid-template-columns:1fr 150px 90px 36px;gap:8px;align-items:center">
+    <input class="fi" value="${p.name}" onchange="S.presets[${i}].name=this.value"/>
+    <input class="fi" type="number" value="${p.price}" onchange="S.presets[${i}].price=parseFloat(this.value)||0"/>
+    <select class="fi" onchange="S.presets[${i}].cur=this.value"><option ${p.cur==='NGN'?'selected':''}>NGN</option><option ${p.cur==='USD'?'selected':''}>USD</option><option ${p.cur==='GBP'?'selected':''}>GBP</option></select>
+    <button class="ib" onclick="S.presets.splice(${i},1);render()" style="color:var(--red)">✕</button>
+  </div>`).join('')}
+</div>
+<button class="btn btn-g btn-s" onclick="S.presets.push({name:'New Service',price:0,cur:'NGN'});render()">+ Add</button>
+<button class="btn btn-p" style="margin-left:10px" onclick="notify('Presets saved')">Save</button>`;}
+function rSWm(){return`
+<div class="fst">Watermark & PDF Settings</div>
+<div class="fg"><label class="fl">Letterhead / Watermark</label>
+  <div class="up-zone" onclick="notify('Connect to file upload API in production','err')">
+    <div style="font-size:28px;margin-bottom:8px">🖼</div>
+    <div style="font-size:13px;color:var(--dim)">Click to upload watermark</div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Current: Letter_head_Plain.png ✓</div>
+  </div>
+</div>
+<div class="fg"><label class="fl">Watermark Opacity (${Math.round(S.cfg.wmOpacity*100)}%)</label>
+  <input type="range" min="0" max="30" value="${Math.round(S.cfg.wmOpacity*100)}" style="width:100%;accent-color:var(--pink)" oninput="S.cfg.wmOpacity=this.value/100;this.previousElementSibling.textContent='Watermark Opacity ('+this.value+'%)'"/></div>
+<div class="fg"><label class="fl">PDF Password</label><input class="fi" type="password" value="1204Studios2026" placeholder="PDF password"/></div>
+<div class="fg"><label class="fl">Footer Text</label><textarea class="fi" rows="4" onchange="S.cfg.footer=this.value">${S.cfg.footer}</textarea></div>
+<button class="btn btn-p" onclick="notify('Settings saved')">Save Settings</button>`;}
+
+// ── view invoice modal ──
+function viewInv(id){S.viewing=id;S.modal='view';render();setTimeout(initCharts,80);}
+function rViewModal(){
+  const inv=S.invoices.find(i=>i.id===S.viewing);
+  if(!inv)return'';
+  const c=calc(inv);const acc=S.accounts.find(a=>a.id===inv.account)||{};
+  const pct=Math.round(c.paid/Math.max(1,c.tot)*100);
+  return`
+<div class="mb fade" onclick="if(event.target===this)closeModal()">
+<div class="modal mxl" style="max-height:92vh">
+  <div class="mh">
+    <div><div class="mt mono">${inv.id}</div><div style="margin-top:5px">${sbadge(inv.status)}</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select class="fs" style="font-size:12px" onchange="updStatus('${inv.id}',this.value)">
+        ${['draft','sent','deposit','partial','paid','overdue','cancelled'].map(s=>`<option value="${s}" ${inv.status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+      </select>
+      <button class="btn btn-g btn-s" onclick="editInv('${inv.id}')">Edit</button>
+      <button class="btn btn-p btn-s" onclick="dlPDF('${inv.id}')">⬇ PDF</button>
+      <div class="xbtn" onclick="closeModal()">✕</div>
+    </div>
+  </div>
+  <div class="mbody" style="display:grid;grid-template-columns:1fr 290px;gap:24px">
+    <div>
+      <div class="fst" style="font-size:13px">${inv.project}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div><div class="fl">Client</div><div style="font-weight:600;color:var(--text)">${inv.client}</div><div style="font-size:12px;color:var(--muted)">${inv.company}</div></div>
+        <div><div class="fl">Contact</div><div style="font-size:13px;color:var(--dim)">${inv.email}</div><div style="font-size:12px;color:var(--muted)">${inv.phone}</div></div>
+        <div><div class="fl">Issue Date</div><div style="font-size:13px;color:var(--dim)">${fd(inv.date)}</div></div>
+        <div><div class="fl">Due Date</div><div style="font-size:13px;${inv.status==='overdue'?'color:var(--red);font-weight:600':''}">${fd(inv.due)}</div></div>
+      </div>
+      <table class="tbl"><thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>
+      ${(inv.items||[]).map(item=>{const sub=(+item.q||0)*(+item.p||0);return`<tr>
+        <td class="s">${item.d}</td><td>${item.q}</td>
+        <td>${fc(item.p,inv.currency)}</td><td class="s">${fc(sub,inv.currency)}</td>
+      </tr>`;}).join('')}
+      </tbody></table>
+      <div class="li-tot">
+        <div class="lt-row"><span>Subtotal</span><span>${fc(c.sub,inv.currency)}</span></div>
+        ${inv.discount>0?`<div class="lt-row" style="color:var(--green)"><span>Discount (${inv.discount}%)</span><span>−${fc(c.da,inv.currency)}</span></div>`:''}
+        ${inv.tax>0?`<div class="lt-row"><span>VAT (${inv.tax}%)</span><span>+${fc(c.ta,inv.currency)}</span></div>`:''}
+        <div class="lt-row lt-fin"><span>Total</span><span>${fc(c.tot,inv.currency)}</span></div>
+      </div>
+      ${acc.bank?`<div style="margin-top:14px;padding:14px;background:var(--bg3);border-radius:8px;border:1px solid var(--bd)">
+        <div class="fl" style="margin-bottom:6px">Payment To</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${acc.aname}</div>
+        <div style="font-size:12px;color:var(--dim);margin-top:2px">${acc.bank} · <span style="font-family:var(--mono)">${acc.anum}</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">${acc.instr}</div>
+      </div>`:''}
+    </div>
+    <div>
+      <div style="margin-bottom:18px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <div><div class="fl">Amount Paid</div><div style="font-family:var(--display);font-size:22px;font-weight:700;color:var(--green)">${fc(c.paid,inv.currency)}</div></div>
+          <div style="text-align:right"><div class="fl">Total</div><div style="font-size:15px;color:var(--dim)">${fc(c.tot,inv.currency)}</div></div>
+        </div>
+        <div class="pb-bar" style="height:6px"><div class="pb-fill" style="width:${pct}%;background:${pct>=100?'var(--green)':'var(--orange)'}"></div></div>
+        <div style="font-size:12px;color:var(--dim);margin-top:6px">${fc(c.rem,inv.currency)} remaining (${100-pct}%)</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="ct" style="font-size:13px">Payment History</div>
+        <button class="btn btn-ok btn-xs" onclick="closeModal();setTimeout(()=>recPay('${inv.id}'),80)">+ Record</button>
+      </div>
+      ${(inv.payments||[]).length===0?`<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">No payments recorded</div>`
+        :(inv.payments||[]).map(p=>`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:600;color:var(--green)">${fc(p.amount,inv.currency)}</div>
+          <div style="font-size:11px;color:var(--muted)">${fd(p.date)}</div>
+        </div>
+        <div style="font-size:12px;color:var(--dim);margin-top:4px">${p.method}</div>
+        ${p.ref?`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px">${p.ref}</div>`:''}
+      </div>`).join('')}
+      ${inv.notes?`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px"><div class="fl" style="margin-bottom:6px">Notes</div><div style="font-size:12.5px;color:var(--dim)">${inv.notes}</div></div>`:''}
+    </div>
+  </div>
+</div>
+</div>`;}
+
+// ── create/edit modal ──
+function openNew(){
+  S.inv_form={id:nextId(),client:'',company:'',email:'',phone:'',address:'',project:'',category:'Brand Design',desc:'',date:new Date().toISOString().split('T')[0],due:new Date(Date.now()+14*864e5).toISOString().split('T')[0],currency:'NGN',items:[{d:'',q:1,p:0}],discount:0,tax:7.5,status:'draft',payments:[],account:'ngn-gtbank',notes:'',terms:true};
+  S.modal='create';render();
+}
+function openNewForClient(email){
+  const cl=S.clients.find(c=>c.email===email);
+  openNew();
+  if(cl&&S.inv_form){S.inv_form.client=cl.contact;S.inv_form.company=cl.name;S.inv_form.email=cl.email;S.inv_form.phone=cl.phone;S.inv_form.address=cl.address;}
+  render();
+}
+function editInv(id){
+  const inv=S.invoices.find(i=>i.id===id);
+  S.inv_form=JSON.parse(JSON.stringify(inv));S.editing=id;S.modal='create';S.viewing=null;render();
+}
+function saveInv(){
+  const inv=S.inv_form;
+  if(!inv.client){notify('Client name is required','err');return;}
+  if(!inv.project){notify('Project name is required','err');return;}
+  if(S.editing){const idx=S.invoices.findIndex(i=>i.id===S.editing);if(idx>=0)S.invoices[idx]=inv;notify('Invoice updated');}
+  else{S.invoices.unshift(inv);if(inv.email&&!S.clients.find(c=>c.email===inv.email))S.clients.push({id:'c'+Date.now(),name:inv.company||inv.client,contact:inv.client,email:inv.email,phone:inv.phone,address:inv.address});notify('Invoice created · '+inv.id);}
+  S.modal=null;S.editing=null;render();
+}
+function addLI(){S.inv_form.items.push({d:'',q:1,p:0});render();}
+function remLI(i){S.inv_form.items.splice(i,1);if(S.inv_form.items.length===0)S.inv_form.items.push({d:'',q:1,p:0});render();}
+function applyPreset(i){const p=S.presets[i];if(p&&S.inv_form&&S.inv_form.items.length>0){const li=S.inv_form.items[S.inv_form.items.length-1];li.d=p.name;li.p=p.price;if(!li.q)li.q=1;render();}}
+function fillClient(email){const cl=S.clients.find(c=>c.email===email);if(!cl||!S.inv_form)return;S.inv_form.client=cl.contact;S.inv_form.company=cl.name;S.inv_form.email=cl.email;S.inv_form.phone=cl.phone;S.inv_form.address=cl.address;render();}
+function rliTotals(){
+  const el=document.getElementById('li-tots');if(!el||!S.inv_form)return;
+  const c2=calc(S.inv_form),cur=S.inv_form.currency;
+  el.innerHTML=`<div class="lt-row"><span>Subtotal</span><span>${fc(c2.sub,cur)}</span></div>
+<div class="lt-row" style="gap:12px"><span>Discount <input type="number" min="0" max="100" value="${S.inv_form.discount}" oninput="S.inv_form.discount=parseFloat(this.value)||0;rliTotals()" style="width:44px;font-size:13px;color:var(--text);background:var(--bg4);border:1px solid var(--bd);border-radius:4px;padding:2px 6px"/>%</span><span style="color:var(--green)">−${fc(c2.da,cur)}</span></div>
+<div class="lt-row" style="gap:12px"><span>VAT <input type="number" min="0" max="100" value="${S.inv_form.tax}" oninput="S.inv_form.tax=parseFloat(this.value)||0;rliTotals()" style="width:44px;font-size:13px;color:var(--text);background:var(--bg4);border:1px solid var(--bd);border-radius:4px;padding:2px 6px"/>%</span><span>+${fc(c2.ta,cur)}</span></div>
+<div class="lt-row lt-fin"><span>Total</span><span>${fc(c2.tot,cur)}</span></div>`;}
+
+function rCreateModal(){
+  const inv=S.inv_form;if(!inv)return'';
+  const c2=calc(inv);const isE=!!S.editing;
+  return`
+<div class="mb fade" onclick="if(event.target===this)closeModal()">
+<div class="modal mxl" style="max-height:95vh">
+  <div class="mh">
+    <div><div class="mt">${isE?'Edit Invoice':'Create Invoice'}</div><div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px">${inv.id}</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-g btn-s" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-p btn-s" onclick="saveInv()">${isE?'Save Changes':'Create Invoice'}</button>
+      <div class="xbtn" onclick="closeModal()">✕</div>
+    </div>
+  </div>
+  <div class="mbody" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+    <div>
+      <div class="fst">Client</div>
+      <div class="fg"><label class="fl">Select Existing</label>
+        <select class="fi" onchange="fillClient(this.value)"><option value="">— Select client —</option>${S.clients.map(c=>`<option value="${c.email}">${c.name}</option>`).join('')}</select></div>
+      <div class="fr c2">
+        <div class="fg"><label class="fl">Client Name</label><input class="fi" value="${inv.client}" oninput="S.inv_form.client=this.value" placeholder="Full name"/></div>
+        <div class="fg"><label class="fl">Company</label><input class="fi" value="${inv.company}" oninput="S.inv_form.company=this.value" placeholder="Company"/></div>
+        <div class="fg"><label class="fl">Email</label><input class="fi" type="email" value="${inv.email}" oninput="S.inv_form.email=this.value" placeholder="email@co.com"/></div>
+        <div class="fg"><label class="fl">Phone</label><input class="fi" value="${inv.phone}" oninput="S.inv_form.phone=this.value" placeholder="+234…"/></div>
+      </div>
+      <div class="fg"><label class="fl">Address</label><input class="fi" value="${inv.address}" oninput="S.inv_form.address=this.value" placeholder="Full address"/></div>
+      <div class="divider"></div>
+      <div class="fst">Project</div>
+      <div class="fg"><label class="fl">Project Name</label><input class="fi" value="${inv.project}" oninput="S.inv_form.project=this.value" placeholder="e.g. Brand Identity"/></div>
+      <div class="fr c2">
+        <div class="fg"><label class="fl">Category</label>
+          <select class="fi" onchange="S.inv_form.category=this.value">${['Brand Design','Marketing Campaigns','Print Media','Design & Web Tutoring'].map(c=>`<option ${inv.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        <div class="fg"><label class="fl">Currency</label>
+          <select class="fi" onchange="S.inv_form.currency=this.value"><option ${inv.currency==='NGN'?'selected':''}>NGN</option><option ${inv.currency==='USD'?'selected':''}>USD</option><option ${inv.currency==='GBP'?'selected':''}>GBP</option></select></div>
+      </div>
+      <div class="fg"><label class="fl">Description</label><textarea class="fi" oninput="S.inv_form.desc=this.value" placeholder="Project scope…">${inv.desc}</textarea></div>
+    </div>
+    <div>
+      <div class="fst">Invoice Details</div>
+      <div class="fr c3">
+        <div class="fg"><label class="fl">Invoice #</label><input class="fi" value="${inv.id}" readonly style="opacity:.6"/></div>
+        <div class="fg"><label class="fl">Issue Date</label><input class="fi" type="date" value="${inv.date}" onchange="S.inv_form.date=this.value"/></div>
+        <div class="fg"><label class="fl">Due Date</label><input class="fi" type="date" value="${inv.due}" onchange="S.inv_form.due=this.value"/></div>
+      </div>
+      <div class="fst" style="margin-top:8px">Line Items</div>
+      <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
+        <select class="fs" style="font-size:12px" onchange="applyPreset(this.selectedIndex-1);this.selectedIndex=0"><option>Apply preset…</option>${S.presets.map((p,i)=>`<option value="${i}">${p.name}</option>`).join('')}</select>
+        <button class="btn btn-g btn-xs" onclick="addLI()">+ Add</button>
+      </div>
+      <div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden;margin-bottom:14px">
+        <div class="li-hdr"><div>Description</div><div>Qty</div><div>Unit Price</div><div>Subtotal</div><div></div></div>
+        ${(inv.items||[]).map((item,i)=>{const sub=(+item.q||0)*(+item.p||0);return`<div class="li-row">
+          <div class="li-cell"><input value="${item.d}" oninput="S.inv_form.items[${i}].d=this.value" placeholder="Description"/></div>
+          <div class="li-cell"><input type="number" min="1" value="${item.q}" oninput="S.inv_form.items[${i}].q=parseFloat(this.value)||1;rliTotals()" style="width:60px"/></div>
+          <div class="li-cell"><input type="number" min="0" value="${item.p}" oninput="S.inv_form.items[${i}].p=parseFloat(this.value)||0;rliTotals()" style="width:110px"/></div>
+          <div class="li-cell" style="font-size:13px;color:var(--text);font-weight:600;padding:6px 12px">${fc(sub,inv.currency)}</div>
+          <div class="li-cell li-del" onclick="remLI(${i})">✕</div>
+        </div>`;}).join('')}
+        <div class="li-tot" id="li-tots">
+          <div class="lt-row"><span>Subtotal</span><span>${fc(c2.sub,inv.currency)}</span></div>
+          <div class="lt-row" style="gap:12px"><span>Discount <input type="number" min="0" max="100" value="${inv.discount}" oninput="S.inv_form.discount=parseFloat(this.value)||0;rliTotals()" style="width:44px;font-size:13px;color:var(--text);background:var(--bg4);border:1px solid var(--bd);border-radius:4px;padding:2px 6px"/>%</span><span style="color:var(--green)">−${fc(c2.da,inv.currency)}</span></div>
+          <div class="lt-row" style="gap:12px"><span>VAT <input type="number" min="0" max="100" value="${inv.tax}" oninput="S.inv_form.tax=parseFloat(this.value)||0;rliTotals()" style="width:44px;font-size:13px;color:var(--text);background:var(--bg4);border:1px solid var(--bd);border-radius:4px;padding:2px 6px"/>%</span><span>+${fc(c2.ta,inv.currency)}</span></div>
+          <div class="lt-row lt-fin"><span>Total</span><span>${fc(c2.tot,inv.currency)}</span></div>
+        </div>
+      </div>
+      <div class="fr c2">
+        <div class="fg"><label class="fl">Status</label>
+          <select class="fi" onchange="S.inv_form.status=this.value">${['draft','sent','deposit','partial','paid','overdue','cancelled'].map(s=>`<option value="${s}" ${inv.status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}</select></div>
+        <div class="fg"><label class="fl">Payment Account</label>
+          <select class="fi" onchange="S.inv_form.account=this.value">${S.accounts.map(a=>`<option value="${a.id}" ${inv.account===a.id?'selected':''}>${a.label}</option>`).join('')}</select></div>
+      </div>
+      <div class="fg"><label class="fl">Notes</label><input class="fi" value="${inv.notes}" oninput="S.inv_form.notes=this.value" placeholder="Internal notes…"/></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="tc" ${inv.terms?'checked':''} onchange="S.inv_form.terms=this.checked" style="accent-color:var(--pink);width:14px;height:14px"/>
+        <label for="tc" style="font-size:13px;color:var(--dim);cursor:pointer">Append default T&C to PDF</label>
+      </div>
+    </div>
+  </div>
+</div></div>`;}
+
+// ── payment modal ──
+function recPay(id){S.viewing=id;S.modal='pay';render();}
+function rPayModal(){
+  const inv=S.invoices.find(i=>i.id===S.viewing);if(!inv)return'';
+  const c2=calc(inv);
+  return`
+<div class="mb fade" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <div class="mh"><div class="mt">Record Payment</div><div class="xbtn" onclick="closeModal()">✕</div></div>
+  <div class="mbody">
+    <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${inv.id} · ${inv.client}</div>
+      <div style="display:flex;justify-content:space-between">
+        <div><div style="font-size:11px;color:var(--muted)">Total</div><div style="font-family:var(--display);font-size:18px;font-weight:700">${fc(c2.tot,inv.currency)}</div></div>
+        <div><div style="font-size:11px;color:var(--muted)">Remaining</div><div style="font-family:var(--display);font-size:18px;font-weight:700;color:var(--orange)">${fc(c2.rem,inv.currency)}</div></div>
+        <div><div style="font-size:11px;color:var(--muted)">Paid</div><div style="font-family:var(--display);font-size:18px;font-weight:700;color:var(--green)">${fc(c2.paid,inv.currency)}</div></div>
+      </div>
+    </div>
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Amount Paid</label><input class="fi" type="number" id="pa" value="${c2.rem}" min="0"/></div>
+      <div class="fg"><label class="fl">Payment Date</label><input class="fi" type="date" id="pd" value="${new Date().toISOString().split('T')[0]}"/></div>
+    </div>
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Method</label>
+        <select class="fi" id="pm"><option>Bank Transfer</option><option>Paystack</option><option>Stripe</option><option>Cash</option><option>Cheque</option><option>Wise</option></select></div>
+      <div class="fg"><label class="fl">Reference</label><input class="fi" id="pr" placeholder="Transaction ref…"/></div>
+    </div>
+  </div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-ok" onclick="subPay('${inv.id}')">Record Payment</button>
+  </div>
+</div></div>`;}
+
+function subPay(id){
+  const amt=parseFloat(document.getElementById('pa').value)||0;
+  const date=document.getElementById('pd').value;
+  const method=document.getElementById('pm').value;
+  const ref=document.getElementById('pr').value;
+  if(!amt||!date){notify('Fill amount and date','err');return;}
+  const inv=S.invoices.find(i=>i.id===id);if(!inv)return;
+  inv.payments.push({amount:amt,date,method,ref});
+  const c2=calc(inv);
+  if(c2.rem<=0)inv.status='paid';else if(c2.paid>0)inv.status='partial';
+  closeModal();notify(`Payment of ${fc(amt,inv.currency)} recorded`);
+}
+
+// ── add client modal ──
+function rAddClientModal(){return`
+<div class="mb fade" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <div class="mh"><div class="mt">Add Client</div><div class="xbtn" onclick="closeModal()">✕</div></div>
+  <div class="mbody">
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Company</label><input class="fi" id="nc-co" placeholder="Company Ltd"/></div>
+      <div class="fg"><label class="fl">Contact</label><input class="fi" id="nc-ct" placeholder="Full name"/></div>
+      <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="nc-em" placeholder="email@co.com"/></div>
+      <div class="fg"><label class="fl">Phone</label><input class="fi" id="nc-ph" placeholder="+234…"/></div>
+    </div>
+    <div class="fg"><label class="fl">Address</label><input class="fi" id="nc-ad" placeholder="Full address"/></div>
+  </div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-p" onclick="saveClient()">Save Client</button>
+  </div>
+</div></div>`;}
+function saveClient(){
+  const co=document.getElementById('nc-co').value,em=document.getElementById('nc-em').value;
+  if(!co||!em){notify('Company and email required','err');return;}
+  S.clients.push({id:'c'+Date.now(),name:co,contact:document.getElementById('nc-ct').value,email:em,phone:document.getElementById('nc-ph').value,address:document.getElementById('nc-ad').value});
+  closeModal();notify('Client saved');
+}
+
+// ── add account modal ──
+function rAddAccModal(){return`
+<div class="mb fade" onclick="if(event.target===this)closeModal()">
+<div class="modal">
+  <div class="mh"><div class="mt">Add Payment Account</div><div class="xbtn" onclick="closeModal()">✕</div></div>
+  <div class="mbody">
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Label</label><input class="fi" id="na-lb" placeholder="NGN — GTBank"/></div>
+      <div class="fg"><label class="fl">Currency</label><select class="fi" id="na-cu"><option>NGN</option><option>USD</option><option>GBP</option></select></div>
+      <div class="fg"><label class="fl">Bank Name</label><input class="fi" id="na-bk" placeholder="Guaranty Trust Bank"/></div>
+      <div class="fg"><label class="fl">Account Name</label><input class="fi" id="na-an" placeholder="1204 Studios Ltd"/></div>
+      <div class="fg"><label class="fl">Account Number</label><input class="fi" id="na-nu" placeholder="0123456789"/></div>
+      <div class="fg"><label class="fl">SWIFT / Sort Code</label><input class="fi" id="na-sw" placeholder="GTBINGLA"/></div>
+    </div>
+    <div class="fg"><label class="fl">Payment Instructions</label><textarea class="fi" id="na-in" placeholder="Include invoice number…"></textarea></div>
+  </div>
+  <div class="mf">
+    <button class="btn btn-g" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-p" onclick="saveAcc()">Save Account</button>
+  </div>
+</div></div>`;}
+function saveAcc(){
+  const lb=document.getElementById('na-lb').value;
+  if(!lb){notify('Label required','err');return;}
+  S.accounts.push({id:'acc'+Date.now(),label:lb,currency:document.getElementById('na-cu').value,bank:document.getElementById('na-bk').value,aname:document.getElementById('na-an').value,anum:document.getElementById('na-nu').value,swift:document.getElementById('na-sw').value,instr:document.getElementById('na-in').value});
+  closeModal();notify('Account saved');
+}
+
+// ── PDF generation ──
+function dlPDF(id){
+  const inv=S.invoices.find(i=>i.id===id);if(!inv){notify('Not found','err');return;}
+  const c2=calc(inv);const acc=S.accounts.find(a=>a.id===inv.account)||{};const st=S.cfg;
+  const sym=SYM[inv.currency]||inv.currency;
+  const fm=n=>sym+Number(n).toLocaleString('en-NG',{minimumFractionDigits:0});
+  const fd2=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'—';
+  notify('Generating invoice PDF…');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500" rel="stylesheet"/>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,'SF Pro Text',BlinkMacSystemFont,'Helvetica Neue',sans-serif;font-size:12px;color:#1a1a1a;background:#fff;}
+.page{width:210mm;min-height:297mm;position:relative;overflow:hidden;page-break-after:always;}
+.wm{position:absolute;inset:0;z-index:0;pointer-events:none;}.wm img{width:100%;height:100%;object-fit:cover;opacity:${st.wmOpacity};}
+.content{position:relative;z-index:1;padding:40px 48px;}
+.logo{font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,'Helvetica Neue',sans-serif;font-weight:800;font-size:24px;letter-spacing:-.02em;}.logo span{color:${st.color};}
+.si{text-align:right;font-size:11px;color:#555;line-height:1.6;}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px;}
+.inv-t{font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,'Helvetica Neue',sans-serif;font-weight:800;font-size:40px;color:${st.color};margin-bottom:6px;}
+.inv-n{font-family:'Courier New',monospace;font-size:14px;color:#888;margin-bottom:32px;}
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:40px;}
+.ml{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#999;margin-bottom:4px;}
+.mv{font-size:13px;font-weight:600;color:#1a1a1a;}.msub{font-size:11px;color:#666;}
+table{width:100%;border-collapse:collapse;}
+th{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#999;padding:9px 12px;border-bottom:1.5px solid #eee;text-align:left;}
+td{padding:11px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;color:#333;}
+tr:last-child td{border-bottom:none;}
+.tots{background:#f8f8f8;padding:20px 24px;}
+.tr{display:flex;justify-content:space-between;font-size:12.5px;color:#555;margin-bottom:5px;}
+.tf{font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,'Helvetica Neue',sans-serif;font-size:20px;font-weight:700;color:#1a1a1a;display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:2px solid #eee;}
+.pay{margin-top:32px;padding:20px;background:#f8f8f8;border-radius:4px;}
+.footer{margin-top:40px;padding-top:24px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center;line-height:1.6;}
+.tt{font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,'Helvetica Neue',sans-serif;font-weight:700;font-size:20px;color:#1a1a1a;margin-bottom:6px;}
+.ts{font-size:11px;color:#888;margin-bottom:28px;}
+.tb{font-size:11.5px;color:#444;line-height:1.85;white-space:pre-wrap;}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;}
+.sl{border-top:1.5px solid #333;padding-top:8px;}.sl-l{font-size:10px;color:#888;}
+</style></head><body>
+<div class="page">
+  <div class="wm"><img src="${document.querySelector('img')?document.querySelector('img').src:''}"/></div>
+  <div class="content">
+    <div class="hdr">
+      <div><div class="logo">1204<span>Studios</span></div><div style="font-size:10px;color:#888;margin-top:3px">${st.tag}</div></div>
+      <div class="si"><div style="font-size:9px;color:#bbb;margin-bottom:2px">${st.rc}</div><div>${st.addr}</div><div>${st.email}</div><div>${st.phone}</div><div>${st.web}</div></div>
+    </div>
+    <div class="inv-t">INVOICE</div>
+    <div class="inv-n">${inv.id}</div>
+    <div class="mg">
+      <div>
+        <div class="ml">Bill To</div><div class="mv">${inv.client}</div>
+        <div class="msub">${inv.company}</div><div class="msub">${inv.email}</div>
+        <div class="msub">${inv.phone}</div><div class="msub" style="margin-top:4px">${inv.address}</div>
+      </div>
+      <div>
+        <div style="margin-bottom:16px"><div class="ml">Issue Date</div><div class="mv">${fd2(inv.date)}</div></div>
+        <div style="margin-bottom:16px"><div class="ml">Due Date</div><div class="mv" style="color:${inv.status==='overdue'?'#ef4444':'#1a1a1a'}">${fd2(inv.due)}</div></div>
+        <div><div class="ml">Project</div><div class="mv">${inv.project}</div><div class="msub">${inv.category}</div></div>
+      </div>
+    </div>
+    ${inv.desc?`<div style="margin-bottom:24px;padding:14px;background:#f8f8f8;border-radius:4px"><div class="ml" style="margin-bottom:6px">Project Description</div><div style="font-size:12px;color:#444;line-height:1.6">${inv.desc}</div></div>`:''}
+    <table>
+      <thead><tr><th>Description</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Subtotal</th></tr></thead>
+      <tbody>${(inv.items||[]).map(item=>{const sub=(+item.q||0)*(+item.p||0);return`<tr><td>${item.d}</td><td style="text-align:center">${item.q}</td><td style="text-align:right">${fm(item.p)}</td><td style="text-align:right;font-weight:600">${fm(sub)}</td></tr>`;}).join('')}</tbody>
+    </table>
+    <div class="tots">
+      <div class="tr"><span>Subtotal</span><span>${fm(c2.sub)}</span></div>
+      ${inv.discount>0?`<div class="tr" style="color:#22c55e"><span>Discount (${inv.discount}%)</span><span>−${fm(c2.da)}</span></div>`:''}
+      ${inv.tax>0?`<div class="tr"><span>VAT (${inv.tax}%)</span><span>+${fm(c2.ta)}</span></div>`:''}
+      <div class="tf"><span>TOTAL</span><span>${fm(c2.tot)}</span></div>
+    </div>
+    ${acc.bank?`<div class="pay"><div class="ml" style="margin-bottom:8px">Payment Details</div><div style="font-weight:600;font-size:12px">${acc.aname}</div><div style="font-size:11px;color:#777">${acc.bank}</div><div style="font-family:'Courier New',monospace;font-size:11px;margin-top:4px">${acc.anum}</div><div style="font-size:11px;color:#777">SWIFT: ${acc.swift}</div><div style="font-size:11px;color:#777;margin-top:6px;font-style:italic">${acc.instr}</div></div>`:''}
+    <div class="footer">${st.footer.replace(/\n/g,' · ')}</div>
+  </div>
+</div>
+${inv.terms?`<div class="page">
+  <div class="wm"><img src="${document.querySelector('img')?document.querySelector('img').src:''}"/></div>
+  <div class="content">
+    <div class="hdr"><div class="logo">1204<span>Studios</span></div><div style="font-size:10px;color:#888">${inv.id}</div></div>
+    <div class="tt">Terms & Conditions</div>
+    <div class="ts">Service Agreement — ${inv.id}</div>
+    <div class="tb">${st.terms}</div>
+    <div class="sg">
+      <div><div class="sl"><div class="sl-l">Authorised by 1204Studios</div></div><div style="font-size:10px;color:#888;margin-top:6px">${st.name} · Date: ___________</div></div>
+      <div><div class="sl"><div class="sl-l">Client Signature & Date</div></div><div style="font-size:10px;color:#888;margin-top:6px">${inv.client} · ${inv.company}</div></div>
+    </div>
+    <div class="footer">${st.footer.replace(/\n/g,' · ')}</div>
+  </div>
+</div>`:''}
+</body></html>`;
+  // embed letterhead image inline
+  const finalHtml = html.replace(/src=""/g,`src="data:image/jpeg;base64,${LH}"`);
+  const blob=new Blob([finalHtml],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`1204STUDIOS-${inv.id}.html`;a.click();
+  URL.revokeObjectURL(url);
+  notify(`Invoice HTML ready: 1204STUDIOS-${inv.id}.html`);
+}
+
+// ── misc ──
+function updStatus(id,status){const inv=S.invoices.find(i=>i.id===id);if(inv){inv.status=status;notify('Status → '+status);render();}}
+function dupInv(id){
+  const inv=S.invoices.find(i=>i.id===id);if(!inv)return;
+  const d=JSON.parse(JSON.stringify(inv));
+  d.id=nextId();d.status='draft';d.payments=[];
+  d.date=new Date().toISOString().split('T')[0];
+  d.due=new Date(Date.now()+14*864e5).toISOString().split('T')[0];
+  S.invoices.unshift(d);notify('Duplicated · '+d.id);render();
+}
+
+// ── charts ──
+let cRChart=null,cSChart=null;
+function initCharts(){
+  const rc=document.getElementById('cR');
+  if(rc&&!cRChart){cRChart=new Chart(rc,{type:'bar',data:{labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],datasets:[{label:'Expected',data:[1061,2296,395,0,0,0,0,0,0,0,0,0],backgroundColor:'rgba(242,100,25,.25)',borderColor:'#F26419',borderWidth:1.5,borderRadius:4},{label:'Collected',data:[1061,1010,0,0,0,0,0,0,0,0,0,0],backgroundColor:'rgba(34,197,94,.3)',borderColor:'#22c55e',borderWidth:1.5,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#666',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#666',font:{size:10},callback:v=>'₦'+v+'k'},grid:{color:'rgba(255,255,255,.04)'}}}}});}
+  const sc=document.getElementById('cS');
+  if(sc&&!cSChart){const invs=S.invoices;const data=['paid','partial','sent','deposit','overdue','draft'].map(s=>invs.filter(i=>i.status===s).length);cSChart=new Chart(sc,{type:'doughnut',data:{labels:['Paid','Partial','Sent','Deposit','Overdue','Draft'],datasets:[{data,backgroundColor:['rgba(34,197,94,.7)','rgba(168,85,247,.7)','rgba(0,212,232,.7)','rgba(234,179,8,.7)','rgba(239,68,68,.7)','rgba(100,100,100,.5)'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:false}}}});}
+}
+
+// ── letterhead ──
+const LH='/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCANKAlMDASIAAhEBAxEB/8QAHAABAQEBAAMBAQAAAAAAAAAAAAIBAwQGBwUI/8QAPhABAAIBAwQBAwMCBAMGBQUAAAECAwQFEQYSITFBBxNRIjJhFHEIFSNCFoGRFyQzlLHRJUNSVmI2VXWhsv/EABwBAQACAgMBAAAAAAAAAAAAAAABAgUGAwQHCP/EACwRAQABAwEGBQMFAAAAAAAAAAABAgMRBAUGEiExQRMyUXGhB2GRIoHB8PH/2gAMAwEAAiEDEQ==';
+
+// ── bulk download ──
+function dlAllInvoices(invList){
+  if(!invList||invList.length===0){notify('No invoices to download','err');return;}
+  notify('Preparing '+invList.length+' invoice'+(invList.length>1?'s':'')+'…');
+  invList.forEach((inv,i)=>{
+    setTimeout(()=>dlPDF(inv.id),i*400);
+  });
+}
+
+// ── render ──
+function render(){
+  const app=document.getElementById('app');
+  const navItems=[{id:'dashboard',icon:'⬡',label:'Dashboard'},{id:'invoices',icon:'📋',label:'Invoices'},{id:'clients',icon:'👤',label:'Clients'},{id:'accounts',icon:'🏦',label:'Accounts'},{id:'settings',icon:'⚙',label:'Settings'}];
+  let page='';
+  if(S.page==='dashboard')page=rDash();
+  else if(S.page==='invoices')page=rInvoices();
+  else if(S.page==='clients')page=rClients();
+  else if(S.page==='accounts')page=rAccounts();
+  else if(S.page==='settings')page=rSettings();
+  let modal='';
+  if(S.modal==='view')modal=rViewModal();
+  else if(S.modal==='create')modal=rCreateModal();
+  else if(S.modal==='pay')modal=rPayModal();
+  else if(S.modal==='addclient')modal=rAddClientModal();
+  else if(S.modal==='addacc')modal=rAddAccModal();
+  app.innerHTML=`
+<div class="sidebar">
+  <div class="sb-logo"><img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUzMSIgaGVpZ2h0PSI0MDEiIHZpZXdCb3g9IjAgMCAxNTMxIDQwMSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTAgMC40NzI2NTZINzMuMjEzOEMxMDEuMjk0IDAuNDcyNjU2IDEyNC4wNTcgMjMuMjM1OCAxMjQuMDU3IDUxLjMxNTZWMzQ5LjI1NUMxMjQuMDU3IDM3Ny4zMzUgMTAxLjI5NCA0MDAuMDk4IDczLjIxMzggNDAwLjA5OEg1MC44NDNDMjIuNzYzMiA0MDAuMDk4IDAgMzc3LjMzNSAwIDM0OS4yNTVWMC40NzI2NTZaIiBmaWxsPSIjMDA5NUZGIi8+CjxwYXRoIGQ9Ik03NDYuMjk3IDEyLjU5MjNDNzUzLjkyNSA0LjgzOTA0IDc2NC4zNDYgMC40NzI2NTYgNzc1LjIyMiAwLjQ3MjY1NkM3ODkuMDU2IDAuNDcyNjU2IDgwMC4yNyAxMS42ODcgODAwLjI3IDI1LjUyMDZWNDAwLjA5OEg1MDIuNDA1QzQ1MS4zNiA0MDAuMDk4IDQyNS41ODMgMzM4LjU3NiA0NjEuMzgyIDMwMi4xODhMNzQ2LjI5NyAxMi41OTIzWiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTIyMS41ODkgMC40ODA0NjlDMzI3Ljc3OCAwLjQ4MDQ4NyA0MTMuODYxIDg5LjkzOTYgNDEzLjg2MSAyMDAuMjkzQzQxMy44NjEgMjM1LjM1NiA0MDUuMTY3IDI2OC4zMDkgMzg5LjkwMiAyOTYuOTU0QzQwNC4yODcgMzA1LjkzNCA0MTMuODYgMzIxLjkwMyA0MTMuODYgMzQwLjExVjM0OS4yNjNDNDEzLjg2IDM3Ny4zNDIgMzkxLjA5NiA0MDAuMTA1IDM2My4wMTcgNDAwLjEwNUgyMjkuODA5VjM5OS45MjVDMjI3LjA4MyA0MDAuMDQ0IDIyNC4zNDMgNDAwLjEwNSAyMjEuNTg5IDQwMC4xMDVIMTU0LjU2MlYzODQuODU0QzE1NC41NjIgMzM4LjI0MSAxOTQuNzYzIDMwNS4xMTUgMjM2LjkwNCAyODUuMTk0QzI2Ny4xOTcgMjcwLjg3NSAyODguNjE1IDI0NC43MzggMjg4LjYxNSAxOTkuNzg1QzI4OC42MTUgMTQ0LjE4NyAyNDUuMjQ1IDk5LjExNjMgMTkxLjc0NSA5OS4xMTYyQzE3Mi45MjIgOTkuMTE2MiAxNTQuNTYyIDgxLjA0MzkgMTU0LjU2MiA2Mi4yMjA3VjI0Ljk3NzVDMTU0LjU2MyAxMS40NDg0IDE2NS4xMTYgMC40ODA2NzQgMTc4LjEzNSAwLjQ4MDQ2OUgyMjEuNTg5WiIgZmlsbD0iI0VEMDA4RSIvPgo8cGF0aCBkPSJNNDM0LjgwNSAxMjMuMjk0QzQwNi45NTMgOTUuNDQxNyA0MDYuOTUzIDUwLjI4NDkgNDM0LjgwNSAyMi40MzMxVjIyLjQzMzFDNDYyLjY1NyAtNS40MTg3OSA1MDcuODE0IC01LjQxODggNTM1LjY2NiAyMi40MzNMNTY2LjE3IDUyLjkzNzFDNTk0LjAyMiA4MC43ODkgNTk0LjAyMiAxMjUuOTQ2IDU2Ni4xNyAxNTMuNzk4VjE1My43OThDNTM4LjMxOCAxODEuNjQ5IDQ5My4xNjEgMTgxLjY0OSA0NjUuMzA5IDE1My43OThMNDM0LjgwNSAxMjMuMjk0WiIgZmlsbD0iI0ZFQzcyMCIvPgo8cGF0aCBkPSJNOTA4LjEwMiAyMDRWNzIuOTE1MUg5MDcuNDQ1TDg2MC4yODUgMTAwLjI3Vjc0LjIyODFMOTA3Ljg4MyA0Ni4xMDcySDkzNy43NTVWMjA0SDkwOC4xMDJaTTk2Ni4zMjIgMjA0VjE4NC42MzNMMTA0OS4xNSAxMzAuNzk4QzEwNTcuNTQgMTI1LjE4MSAxMDY0LjAzIDEyMC4zMyAxMDY4LjYzIDExNi4yNDVDMTA3My4zIDExMi4xNiAxMDc2LjU0IDEwOC4zMzEgMTA3OC4zNyAxMDQuNzU2QzEwODAuMjYgMTAxLjE4MiAxMDgxLjIxIDk3LjMxNTcgMTA4MS4yMSA5My4xNTc4VjkyLjkzODlDMTA4MS4yMSA4Ny40Njc5IDEwNzkuNjEgODIuNzI2NCAxMDc2LjQgNzguNzE0M0MxMDczLjE5IDc0LjcwMjMgMTA2OC41OSA3MS42MDIxIDEwNjIuNjEgNjkuNDEzN0MxMDU2LjYzIDY3LjIyNTMgMTA0OS40OCA2Ni4xMzExIDEwNDEuMTcgNjYuMTMxMUMxMDMyLjE5IDY2LjEzMTEgMTAyNC4zOSA2Ny40MDc2IDEwMTcuNzUgNjkuOTYwOEMxMDExLjExIDcyLjQ0MDkgMTAwNS44MiA3NS45Nzg5IDEwMDEuODggODAuNTc0NUM5OTcuOTQ0IDg1LjE3MDEgOTk1LjUzNyA5MC42Nzc2IDk5NC42NjIgOTcuMDk2OUw5OTQuNDQzIDk4LjQwOTlIOTY2LjIxM1Y5Ny40MjUxQzk2Ny4wODggODYuMjY0MyA5NzAuNjk5IDc2LjYzNTQgOTc3LjA0NSA2OC41MzgzQzk4My40NjQgNjAuMzY4MyA5OTIuMTQ1IDU0LjA5NDkgMTAwMy4wOSA0OS43MTgxQzEwMTQuMSA0NS4yNjg0IDEwMjYuODcgNDMuMDQzNSAxMDQxLjM4IDQzLjA0MzVDMTA1NS44MyA0My4wNDM1IDEwNjguMjMgNDUuMDQ5NSAxMDc4LjU5IDQ5LjA2MTZDMTA4OC45NSA1My4wMDA3IDEwOTYuOSA1OC42MTc2IDExMDIuNDQgNjUuOTEyMkMxMTA4LjA2IDczLjEzMzkgMTExMC44NyA4MS43NDE2IDExMTAuODcgOTEuNzM1M1Y5MS45NTQxQzExMTAuODcgOTguNDQ2NCAxMTA5LjUyIDEwNC40NjQgMTEwNi44MiAxMTAuMDA4QzExMDQuMTIgMTE1LjU1MiAxMDk5LjYzIDEyMS4yMDYgMTA5My4zNiAxMjYuOTY4QzEwODcuMTYgMTMyLjY1OCAxMDc4LjY2IDEzOS4xMTQgMTA2Ny44NiAxNDYuMzM2TDEwMDYuODEgMTg2LjE2NUwxMDE2IDE2OS4yMDVWMTkxLjQxN0wxMDA1LjYgMTgwLjY5NEgxMTE0LjkxVjIwNEg5NjYuMzIyWk0xMjA5LjAyIDIwNi45NTRDMTE5MS44OCAyMDYuOTU0IDExNzcgMjAzLjU2MiAxMTY0LjM4IDE5Ni43NzhDMTE1MS43NiAxODkuOTk0IDExNDEuOTkgMTgwLjQ3NSAxMTM1LjA2IDE2OC4yMkMxMTI4LjIgMTU1Ljk2NSAxMTI0Ljc3IDE0MS41OTQgMTEyNC43NyAxMjUuMTA4VjEyNC44ODlDMTEyNC43NyAxMDguMzMxIDExMjguMiA5My45MjM3IDExMzUuMDYgODEuNjY4N0MxMTQxLjk5IDY5LjQxMzcgMTE1MS43NiA1OS45MzA2IDExNjQuMzggNTMuMjE5NUMxMTc3IDQ2LjQzNTUgMTE5MS44OCA0My4wNDM1IDEyMDkuMDIgNDMuMDQzNUMxMjI1Ljk1IDQzLjA0MzUgMTI0MC42NSA0Ni40MzU1IDEyNTMuMTIgNTMuMjE5NUMxMjY1LjU5IDYwLjAwMzYgMTI3NS4yMiA2OS41MjMxIDEyODIuMDEgODEuNzc4MUMxMjg4Ljg2IDk0LjAzMzEgMTI5Mi4yOSAxMDguNDA0IDEyOTIuMjkgMTI0Ljg4OVYxMjUuMTA4QzEyOTIuMjkgMTQxLjUyMSAxMjg4Ljg2IDE1NS44OTIgMTI4Mi4wMSAxNjguMjJDMTI3NS4yMiAxODAuNDc1IDEyNjUuNTkgMTg5Ljk5NCAxMjUzLjEyIDE5Ni43NzhDMTI0MC42NSAyMDMuNTYyIDEyMjUuOTUgMjA2Ljk1NCAxMjA5LjAyIDIwNi45NTRaTTEyMDkuMDIgMTgzLjMyQzEyMTkuODIgMTgzLjMyIDEyMjkuMTYgMTgwLjkxMiAxMjM3LjA0IDE3Ni4wOThDMTI0NC45OSAxNzEuMjgzIDEyNTEuMTEgMTY0LjUzNiAxMjU1LjQyIDE1NS44NTVDMTI1OS43MiAxNDcuMTAyIDEyNjEuODcgMTM2LjgxNiAxMjYxLjg3IDEyNC45OTlWMTI0Ljc4QzEyNjEuODcgMTEzLjAzNiAxMjU5LjcyIDEwMi44MjMgMTI1NS40MiA5NC4xNDI1QzEyNTEuMTEgODUuMzg5IDEyNDQuOTkgNzguNjQxNCAxMjM3LjA0IDczLjg5OTlDMTIyOS4xNiA2OS4xNTg0IDEyMTkuODIgNjYuNzg3NiAxMjA5LjAyIDY2Ljc4NzZDMTE5Ny45NCA2Ni43ODc2IDExODguMzggNjkuMTU4NCAxMTgwLjM2IDczLjg5OTlDMTE3Mi4zMyA3OC42NDE0IDExNjYuMTMgODUuMzUyNSAxMTYxLjc1IDk0LjAzMzFDMTE1Ny4zOCAxMDIuNzE0IDExNTUuMTkgMTEyLjk2MyAxMTU1LjE5IDEyNC43OFYxMjQuOTk5QzExNTUuMTkgMTM2LjgxNiAxMTU3LjM4IDE0Ny4xMDIgMTE2MS43NSAxNTUuODU1QzExNjYuMTMgMTY0LjUzNiAxMTcyLjMzIDE3MS4yODMgMTE4MC4zNiAxNzYuMDk4QzExODguMzggMTgwLjkxMiAxMTk3Ljk0IDE4My4zMiAxMjA5LjAyIDE4My4zMlpNMTQwOS42IDIwNFYxNzMuOEgxMzAxLjE2VjE0OS42MThDMTMwNy40NCAxNDIuNzYxIDEzMTMuNzEgMTM1Ljg2OCAxMzE5Ljk4IDEyOC45MzhDMTMyNi4yNiAxMjIuMDA4IDEzMzIuNTMgMTE1LjExNSAxMzM4LjggMTA4LjI1OEMxMzQ1LjA4IDEwMS4zMjggMTM1MS4zNSA5NC40MzQzIDEzNTcuNjIgODcuNTc3M0MxMzYzLjkgODAuNjQ3NCAxMzcwLjE3IDczLjc1NCAxMzc2LjQ0IDY2Ljg5N0MxMzgyLjc5IDU5Ljk2NzEgMTM4OS4xIDUzLjAzNzIgMTM5NS4zNyA0Ni4xMDcySDE0MzguMzhWMTUwLjYwM0gxNDY0LjA5VjE3My44SDE0MzguMzhWMjA0SDE0MDkuNlpNMTMzMi4wMiAxNTEuMTVIMTQxMC4wNFY2Ni44OTdIMTQwOS4yN0MxNDA0LjA5IDcyLjUxMzkgMTM5OC45MSA3OC4xMzA4IDEzOTMuNzMgODMuNzQ3N0MxMzg4LjYzIDg5LjI5MTYgMTM4My40OCA5NC44MzU1IDEzNzguMyAxMDAuMzc5QzEzNzMuMiAxMDUuOTIzIDEzNjguMDYgMTExLjUwNCAxMzYyLjg4IDExNy4xMjFDMTM1Ny43NyAxMjIuNjY1IDEzNTIuNjMgMTI4LjI0NSAxMzQ3LjQ1IDEzMy44NjJDMTM0Mi4zNCAxMzkuNDA2IDEzMzcuMiAxNDQuOTUgMTMzMi4wMiAxNTAuNDk0VjE1MS4xNVoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik05MTIuMzQgMzg3LjM5OEM5MDEuNzA2IDM4Ny4zOTggODkyLjMyNCAzODUuNjk1IDg4NC4xOTMgMzgyLjI5Qzg3Ni4xMzEgMzc4Ljg4NCA4NjkuNzAzIDM3NC4wNTQgODY0LjkwNyAzNjcuNzk5Qzg2MC4xODEgMzYxLjU0NCA4NTcuNTA2IDM1NC4yMTIgODU2Ljg4IDM0NS44MDNMODU2Ljc3NiAzNDQuMzQ0SDg3MC45NTRMODcxLjE2MiAzNDUuODAzQzg3MS44NTcgMzUxLjU3MiA4NzQuMDEyIDM1Ni42MSA4NzcuNjI1IDM2MC45MTlDODgxLjIzOSAzNjUuMTU4IDg4Ni4wNjkgMzY4LjQ2IDg5Mi4xMTYgMzcwLjgyMkM4OTguMTYyIDM3My4xMTYgOTA1LjE0NyAzNzQuMjYzIDkxMy4wNjkgMzc0LjI2M0M5MjAuOTIzIDM3NC4yNjMgOTI3LjczMyAzNzMuMTE2IDkzMy41MDIgMzcwLjgyMkM5MzkuMzQgMzY4LjQ2IDk0My44NTcgMzY1LjEyNCA5NDcuMDU0IDM2MC44MTVDOTUwLjMyIDM1Ni40MzYgOTUxLjk1MyAzNTEuMzYzIDk1MS45NTMgMzQ1LjU5NVYzNDUuNDlDOTUxLjk1MyAzMzguMTI0IDk0OS40MTcgMzMyLjI1MSA5NDQuMzQzIDMyNy44NzNDOTM5LjI3IDMyMy40MjUgOTMwLjkzIDMxOS44OCA5MTkuMzI0IDMxNy4yNEw5MDIuODUzIDMxMy41OTFDODg4LjMyOCAzMTAuMjU1IDg3Ny42MjUgMzA1LjM1NSA4NzAuNzQ1IDI5OC44OTJDODYzLjkzNCAyOTIuMzU5IDg2MC41MjkgMjgzLjc0MiA4NjAuNTI5IDI3My4wMzlWMjcyLjkzNUM4NjAuNTk4IDI2NC45NDIgODYyLjgyMiAyNTcuODg4IDg2Ny4yMDEgMjUxLjc3M0M4NzEuNTc5IDI0NS42NTcgODc3LjYyNSAyNDAuODYxIDg4NS4zNCAyMzcuMzg2Qzg5My4wNTQgMjMzLjkxMiA5MDEuODQ1IDIzMi4xNzQgOTExLjcxNCAyMzIuMTc0QzkyMS40NDQgMjMyLjE3NCA5MzAuMDk2IDIzMy45NDYgOTM3LjY3MiAyMzcuNDkxQzk0NS4yNDcgMjQwLjk2NiA5NTEuMjkzIDI0NS44MyA5NTUuODExIDI1Mi4wODVDOTYwLjM5NyAyNTguMjcxIDk2Mi45NjkgMjY1LjQ5OCA5NjMuNTI1IDI3My43NjlMOTYzLjYyOSAyNzUuMjI4SDk0OS40NTFMOTQ5LjM0NyAyNzMuODczQzk0OC41ODMgMjY3Ljk2NiA5NDYuNTMzIDI2Mi44OTIgOTQzLjE5NyAyNTguNjUzQzkzOS45MyAyNTQuNDEzIDkzNS41ODcgMjUxLjE0NyA5MzAuMTY2IDI0OC44NTRDOTI0Ljc0NSAyNDYuNDkxIDkxOC40OSAyNDUuMzA5IDkxMS40MDEgMjQ1LjMwOUM5MDQuMTc0IDI0NS4zMDkgODk3LjgxNSAyNDYuNDU2IDg5Mi4zMjQgMjQ4Ljc0OUM4ODYuODM0IDI1MS4wNDMgODgyLjU2IDI1NC4yNCA4NzkuNTAyIDI1OC4zNEM4NzYuNTEzIDI2Mi4zNzEgODc1LjAxOSAyNjcuMDk3IDg3NS4wMTkgMjcyLjUxOFYyNzIuNzI2Qzg3NS4wMTkgMjc5LjY3NiA4NzcuNTU2IDI4NS4zNzUgODgyLjYyOSAyODkuODIzQzg4Ny43MDMgMjk0LjIwMSA4OTUuNjk1IDI5Ny42NDEgOTA2LjYwNiAzMDAuMTQzTDkyMy4wNzcgMzAzLjc5MkM5MzMuMzYzIDMwNi4wODUgOTQxLjY2OCAzMDkuMDM5IDk0Ny45OTIgMzEyLjY1M0M5NTQuMzg2IDMxNi4xOTcgOTU5LjA0MiAzMjAuNjEgOTYxLjk2MSAzMjUuODkyQzk2NC44OCAzMzEuMTc0IDk2Ni4zMzkgMzM3LjQ5OCA5NjYuMzM5IDM0NC44NjVWMzQ0Ljk2OUM5NjYuMzM5IDM1My41ODcgOTY0LjExNiAzNjEuMDkzIDk1OS42NjggMzY3LjQ4N0M5NTUuMjg5IDM3My44MTEgOTQ5LjAzNCAzNzguNzEgOTQwLjkwMyAzODIuMTg1QzkzMi44NDEgMzg1LjY2IDkyMy4zMiAzODcuMzk4IDkxMi4zNCAzODcuMzk4Wk0xMDEwLjU1IDM4Ni45ODFDMTAwMS42NSAzODYuOTgxIDk5NC45ODEgMzg0Ljc5MiA5OTAuNTMzIDM4MC40MTNDOTg2LjE1NSAzNzUuOTY1IDk4My45NjYgMzY5LjAxNSA5ODMuOTY2IDM1OS41NjRWMjg4LjE1NUg5NjguMDE2VjI3Ni41ODNIOTgzLjk2NlYyNDcuMjlIOTk4LjE0M1YyNzYuNTgzSDEwMTkuNTFWMjg4LjE1NUg5OTguMTQzVjM1OS4zNTVDOTk4LjE0MyAzNjUuMzMyIDk5OS4zOTQgMzY5LjUwMiAxMDAxLjkgMzcxLjg2NUMxMDA0LjQ3IDM3NC4yMjggMTAwOC4yOSAzNzUuNDA5IDEwMTMuMzYgMzc1LjQwOUMxMDE0LjU0IDM3NS40MDkgMTAxNS42NiAzNzUuMzc1IDEwMTYuNyAzNzUuMzA1QzEwMTcuODEgMzc1LjE2NiAxMDE4Ljc1IDM3NS4wNjIgMTAxOS41MSAzNzQuOTkyVjM4Ni4xNDdDMTAxOC40NyAzODYuMzU1IDEwMTcuMTIgMzg2LjUyOSAxMDE1LjQ1IDM4Ni42NjhDMTAxMy44NSAzODYuODc2IDEwMTIuMjIgMzg2Ljk4MSAxMDEwLjU1IDM4Ni45ODFaTTEwNjggMzg2Ljg3NkMxMDYwIDM4Ni44NzYgMTA1My4xNiAzODUuMjQzIDEwNDcuNDYgMzgxLjk3N0MxMDQxLjc2IDM3OC43MSAxMDM3LjM4IDM3NC4wMTkgMTAzNC4zMyAzNjcuOTA0QzEwMzEuMjcgMzYxLjc4OCAxMDI5Ljc0IDM1NC40OSAxMDI5Ljc0IDM0Ni4wMTJWMjc2LjU4M0gxMDQzLjVWMzQzLjcxOEMxMDQzLjUgMzUzLjc5NSAxMDQ1LjkzIDM2MS40NzUgMTA1MC44IDM2Ni43NTdDMTA1NS43MyAzNzIuMDM5IDEwNjIuNzggMzc0LjY4IDEwNzEuOTYgMzc0LjY4QzEwNzYuNzUgMzc0LjY4IDEwODEuMDYgMzczLjg4IDEwODQuODggMzcyLjI4MkMxMDg4LjcxIDM3MC42MTQgMTA5Mi4wMSAzNjguMjg2IDEwOTQuNzkgMzY1LjI5N0MxMDk3LjY0IDM2Mi4zMDkgMTA5OS43OSAzNTguNzY1IDExMDEuMjUgMzU0LjY2NEMxMTAyLjc4IDM1MC40OTQgMTEwMy41NCAzNDUuODczIDExMDMuNTQgMzQwLjc5OVYyNzYuNTgzSDExMTcuMlYzODVIMTEwMy41NFYzNjYuNDQ0SDExMDMuMTNDMTEwMS4zMiAzNzAuMzM2IDEwOTguNzggMzczLjg0NiAxMDk1LjUyIDM3Ni45NzNDMTA5Mi4yNSAzODAuMDMxIDEwODguMjkgMzgyLjQ2MyAxMDgzLjYzIDM4NC4yN0MxMDc5LjA1IDM4Ni4wMDggMTA3My44MyAzODYuODc2IDEwNjggMzg2Ljg3NlpNMTE3Mi45OCAzODYuOTgxQzExNjMuODggMzg2Ljk4MSAxMTU1Ljg5IDM4NC42NTMgMTE0OSAzNzkuOTk2QzExNDIuMTIgMzc1LjM0IDExMzYuNzQgMzY4LjgwNyAxMTMyLjg1IDM2MC4zOThDMTEyOS4wMiAzNTEuOTE5IDExMjcuMTEgMzQyLjA1IDExMjcuMTEgMzMwLjc5MlYzMzAuNjg3QzExMjcuMTEgMzE5LjM1OSAxMTI5LjA2IDMwOS41MjUgMTEzMi45NSAzMDEuMTg2QzExMzYuODQgMjkyLjc3NiAxMTQyLjE5IDI4Ni4yNDQgMTE0OSAyODEuNTg3QzExNTUuODkgMjc2LjkzMSAxMTYzLjg0IDI3NC42MDMgMTE3Mi44OCAyNzQuNjAzQzExNzguNTggMjc0LjYwMyAxMTgzLjg2IDI3NS42MSAxMTg4LjcyIDI3Ny42MjZDMTE5My41OSAyNzkuNjQxIDExOTcuODMgMjgyLjUyNSAxMjAxLjQ0IDI4Ni4yNzhDMTIwNS4xMiAyODkuOTYyIDEyMDcuOTcgMjk0LjMwNSAxMjA5Ljk5IDI5OS4zMDlIMTIxMC40MVYyMzQuNTcySDEyMjQuMDZWMzg1SDEyMTAuNDFWMzYyLjM3OEgxMjA5Ljg5QzEyMDcuODcgMzY3LjM4MiAxMjA1LjA1IDM3MS43MjYgMTIwMS40NCAzNzUuNDA5QzExOTcuODMgMzc5LjAyMyAxMTkzLjYyIDM4MS44NzMgMTE4OC44MyAzODMuOTU4QzExODQuMDMgMzg1Ljk3MyAxMTc4Ljc1IDM4Ni45ODEgMTE3Mi45OCAzODYuOTgxWk0xMTc1LjU5IDM3NC42OEMxMTgyLjQgMzc0LjY4IDExODguNDEgMzcyLjg3MyAxMTkzLjYyIDM2OS4yNTlDMTE5OC45IDM2NS41NzUgMTIwMyAzNjAuNDMyIDEyMDUuOTIgMzUzLjgzQzEyMDguOTEgMzQ3LjE1OCAxMjEwLjQxIDMzOS40NzkgMTIxMC40MSAzMzAuNzkyVjMzMC42ODdDMTIxMC40MSAzMjIgMTIwOC45MSAzMTQuMzU1IDEyMDUuOTIgMzA3Ljc1M0MxMjAyLjk0IDMwMS4xNTEgMTE5OC44MyAyOTYuMDQzIDExOTMuNjIgMjkyLjQyOUMxMTg4LjQxIDI4OC43NDUgMTE4Mi40IDI4Ni45MDQgMTE3NS41OSAyODYuOTA0QzExNjguNjQgMjg2LjkwNCAxMTYyLjU2IDI4OC43MTEgMTE1Ny4zNCAyOTIuMzI1QzExNTIuMiAyOTUuODY5IDExNDguMjEgMzAwLjk0MiAxMTQ1LjM2IDMwNy41NDVDMTE0Mi41OCAzMTQuMDc3IDExNDEuMTkgMzIxLjc5MiAxMTQxLjE5IDMzMC42ODdWMzMwLjc5MkMxMTQxLjE5IDMzOS42ODcgMTE0Mi41OCAzNDcuNDM2IDExNDUuMzYgMzU0LjAzOUMxMTQ4LjIxIDM2MC42NDEgMTE1Mi4yIDM2NS43NDkgMTE1Ny4zNCAzNjkuMzYzQzExNjIuNTYgMzcyLjkwNyAxMTY4LjY0IDM3NC42OCAxMTc1LjU5IDM3NC42OFpNMTI0MS4zOCAzODVWMjc2LjU4M0gxMjU1LjE0VjM4NUgxMjQxLjM4Wk0xMjQ4LjI2IDI1Ni45ODVDMTI0NS43NSAyNTYuOTg1IDEyNDMuNiAyNTYuMTE2IDEyNDEuNzkgMjU0LjM3OUMxMjQwLjA2IDI1Mi41NzIgMTIzOS4xOSAyNTAuMzgzIDEyMzkuMTkgMjQ3LjgxMUMxMjM5LjE5IDI0NS4zMDkgMTI0MC4wNiAyNDMuMTkgMTI0MS43OSAyNDEuNDUyQzEyNDMuNiAyMzkuNjQ1IDEyNDUuNzUgMjM4Ljc0MiAxMjQ4LjI2IDIzOC43NDJDMTI1MC44MyAyMzguNzQyIDEyNTIuOTggMjM5LjY0NSAxMjU0LjcyIDI0MS40NTJDMTI1Ni41MyAyNDMuMTkgMTI1Ny40MyAyNDUuMzA5IDEyNTcuNDMgMjQ3LjgxMUMxMjU3LjQzIDI1MC4zODMgMTI1Ni41MyAyNTIuNTcyIDEyNTQuNzIgMjU0LjM3OUMxMjUyLjk4IDI1Ni4xMTYgMTI1MC44MyAyNTYuOTg1IDEyNDguMjYgMjU2Ljk4NVpNMTMxNS40IDM4Ni45ODFDMTMwNS42IDM4Ni45MTEgMTI5Ni45OCAzODQuNjE4IDEyODkuNTUgMzgwLjFDMTI4Mi4xMSAzNzUuNTE0IDEyNzYuMzEgMzY5LjAxNSAxMjcyLjE0IDM2MC42MDZDMTI2OC4wNCAzNTIuMTk3IDEyNjUuOTkgMzQyLjI1OSAxMjY1Ljk5IDMzMC43OTJWMzMwLjU4M0MxMjY1Ljk5IDMxOS4xMTYgMTI2OC4wNCAzMDkuMjEzIDEyNzIuMTQgMzAwLjg3M0MxMjc2LjMxIDI5Mi40NjQgMTI4Mi4xMSAyODYgMTI4OS41NSAyODEuNDgzQzEyOTYuOTggMjc2Ljg5NiAxMzA1LjU3IDI3NC42MDMgMTMxNS4zIDI3NC42MDNDMTMyNS4xNiAyNzQuNjAzIDEzMzMuNzggMjc2Ljg5NiAxMzQxLjE1IDI4MS40ODNDMTM0OC41OCAyODYgMTM1NC4zOSAyOTIuNDI5IDEzNTguNTYgMzAwLjc2OUMxMzYyLjczIDMwOS4xMDggMTM2NC44MSAzMTkuMDQ3IDEzNjQuODEgMzMwLjU4M1YzMzAuNzkyQzEzNjQuODEgMzQyLjMyOCAxMzYyLjczIDM1Mi4zMDEgMTM1OC41NiAzNjAuNzFDMTM1NC4zOSAzNjkuMDUgMTM0OC42MiAzNzUuNTE0IDEzNDEuMjUgMzgwLjFDMTMzMy44OSAzODQuNjg3IDEzMjUuMjcgMzg2Ljk4MSAxMzE1LjQgMzg2Ljk4MVpNMTMxNS41IDM3NC42OEMxMzIyLjU5IDM3NC42OCAxMzI4Ljc4IDM3Mi45NDIgMTMzNC4wNiAzNjkuNDY3QzEzMzkuMzQgMzY1Ljk5MiAxMzQzLjQ0IDM2MC45NTQgMTM0Ni4zNiAzNTQuMzUxQzEzNDkuMjggMzQ3Ljc0OSAxMzUwLjc0IDMzOS44OTYgMTM1MC43NCAzMzAuNzkyVjMzMC41ODNDMTM1MC43NCAzMjEuNDA5IDEzNDkuMjggMzEzLjU1NiAxMzQ2LjM2IDMwNy4wMjNDMTM0My40NCAzMDAuNDkxIDEzMzkuMzEgMjk1LjUyMSAxMzMzLjk2IDI5Mi4xMTZDMTMyOC42NyAyODguNjQxIDEzMjIuNDUgMjg2LjkwNCAxMzE1LjMgMjg2LjkwNEMxMzA4LjI4IDI4Ni45MDQgMTMwMi4xMyAyODguNjQxIDEyOTYuODQgMjkyLjExNkMxMjkxLjU2IDI5NS41OTEgMTI4Ny40MyAzMDAuNTk1IDEyODQuNDQgMzA3LjEyOEMxMjgxLjUyIDMxMy42NiAxMjgwLjA2IDMyMS40NzkgMTI4MC4wNiAzMzAuNTgzVjMzMC43OTJDMTI4MC4wNiAzMzkuODk2IDEyODEuNTIgMzQ3Ljc0OSAxMjg0LjQ0IDM1NC4zNTFDMTI4Ny40MyAzNjAuOTU0IDEyOTEuNTYgMzY1Ljk5MiAxMjk2Ljg0IDM2OS40NjdDMTMwMi4xMyAzNzIuOTQyIDEzMDguMzUgMzc0LjY4IDEzMTUuNSAzNzQuNjhaTTE0MTEuODQgMzg2Ljk4MUMxNDAzLjY0IDM4Ni45ODEgMTM5Ni40OCAzODUuNjI1IDEzOTAuMzYgMzgyLjkxNUMxMzg0LjMxIDM4MC4xMzUgMTM3OS40OCAzNzYuMzQ4IDEzNzUuODcgMzcxLjU1MkMxMzcyLjI2IDM2Ni42ODcgMTM3MC4xIDM2MS4wNTggMTM2OS40MSAzNTQuNjY0TDEzNjkuMyAzNTMuNzI2SDEzODIuOTZMMTM4My4xNyAzNTQuNjY0QzEzODQuMjggMzYwLjk4OCAxMzg3LjMgMzY2LjAyNyAxMzkyLjI0IDM2OS43OEMxMzk3LjE3IDM3My40NjMgMTQwMy43IDM3NS4zMDUgMTQxMS44NCAzNzUuMzA1QzE0MTcuNCAzNzUuMzA1IDE0MjIuMTYgMzc0LjU0MSAxNDI2LjEyIDM3My4wMTJDMTQzMC4xNSAzNzEuNDgzIDE0MzMuMjQgMzY5LjI5MyAxNDM1LjQgMzY2LjQ0NEMxNDM3LjYyIDM2My41MjUgMTQzOC43MyAzNjAuMTg5IDE0MzguNzMgMzU2LjQzNlYzNTYuMzMyQzE0MzguNzMgMzUxLjYwNiAxNDM3LjI3IDM0Ny44NTMgMTQzNC4zNSAzNDUuMDczQzE0MzEuNDMgMzQyLjI5NCAxNDI2LjMzIDM0MC4wMzUgMTQxOS4wMyAzMzguMjk3TDE0MDIuNjYgMzM0LjQ0QzEzOTUuODUgMzMyLjc3MiAxMzkwLjE5IDMzMC42NTMgMTM4NS42NyAzMjguMDgxQzEzODEuMjIgMzI1LjUxIDEzNzcuODkgMzIyLjM4MiAxMzc1LjY2IDMxOC42OTlDMTM3My41MSAzMTQuOTQ2IDEzNzIuNDMgMzEwLjU2OCAxMzcyLjQzIDMwNS41NjRWMzA1LjQ2QzEzNzIuNDMgMjk5LjQxMyAxMzc0LjA2IDI5NC4wOTcgMTM3Ny4zMyAyODkuNTFDMTM4MC42NyAyODQuODU0IDEzODUuMjIgMjgxLjIwNSAxMzkwLjk5IDI3OC41NjRDMTM5Ni44MiAyNzUuOTIzIDE0MDMuNSAyNzQuNjAzIDE0MTEgMjc0LjYwM0MxNDE4LjcyIDI3NC42MDMgMTQyNS40MiAyNzUuOTkzIDE0MzEuMTIgMjc4Ljc3MkMxNDM2Ljg5IDI4MS40ODMgMTQ0MS40NCAyODUuMjcxIDE0NDQuNzggMjkwLjEzNUMxNDQ4LjE4IDI5NC45MzEgMTQ1MC4xMyAzMDAuNDU2IDE0NTAuNjIgMzA2LjcxMUwxNDUwLjcyIDMwNy44NTdIMTQzNy41OUwxNDM3LjQ4IDMwNy4xMjhDMTQzNi42NSAzMDAuODAzIDE0MzMuOSAyOTUuNzY1IDE0MjkuMjUgMjkyLjAxMkMxNDI0LjY2IDI4OC4xODkgMTQxOC41OCAyODYuMjc4IDE0MTEgMjg2LjI3OEMxNDA2LjA3IDI4Ni4yNzggMTQwMS43NiAyODcuMDc3IDEzOTguMDggMjg4LjY3NkMxMzk0LjM5IDI5MC4yMDUgMTM5MS41NCAyOTIuMzk0IDEzODkuNTMgMjk1LjI0M0MxMzg3LjUxIDI5OC4wMjMgMTM4Ni41IDMwMS4yNTUgMTM4Ni41IDMwNC45MzhWMzA1LjA0M0MxMzg2LjUgMzA3Ljg5MiAxMzg3LjE2IDMxMC40NjQgMTM4OC40OCAzMTIuNzU3QzEzODkuODcgMzE0Ljk4MSAxMzkyLjAzIDMxNi44OTIgMTM5NC45NSAzMTguNDkxQzEzOTcuOTQgMzIwLjA4OSAxNDAxLjgzIDMyMS40NzkgMTQwNi42MiAzMjIuNjZMMTQyMi44OSAzMjYuNTE4QzE0MzMuNzMgMzI5LjA4OSAxNDQxLjQxIDMzMi42NjggMTQ0NS45MiAzMzcuMjU1QzE0NTAuNTEgMzQxLjc3MiAxNDUyLjgxIDM0Ny44MTkgMTQ1Mi44MSAzNTUuMzk0VjM1NS40OThDMTQ1Mi44MSAzNjEuNjgzIDE0NTEuMDMgMzY3LjEzOSAxNDQ3LjQ5IDM3MS44NjVDMTQ0My45NCAzNzYuNTkxIDE0MzkuMDggMzgwLjMwOSAxNDMyLjg5IDM4My4wMTlDMTQyNi43OCAzODUuNjYgMTQxOS43NiAzODYuOTgxIDE0MTEuODQgMzg2Ljk4MVoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=" alt="1204Studios" style="height:26px;width:auto;display:block;margin-bottom:2px;"/>
+  <div class="sb-sub">INVOICE SYSTEM</div></div>
+  <div class="sb-nav">
+    ${navItems.map(n=>`<div class="sb-item ${S.page===n.id?'active':''}" onclick="nav('${n.id}')"><span class="icon">${n.icon}</span><span>${n.label}</span></div>`).join('')}
+  </div>
+  <div class="sb-footer"><div class="sb-ft">invoices.1204studios.com</div><div class="sb-ft" style="font-size:9px;margin-top:2px">v1.0 · 2026</div></div>
+</div>
+<div class="main">${page}</div>
+${modal}
+${S.notif?`<div class="notif ${S.notif.type==='ok'?'ok':'err'}">${S.notif.type==='ok'?'✓':'✕'} ${S.notif.msg}</div>`:''}`;
+  if(S.page==='dashboard')setTimeout(initCharts,60);
+}
+render();
+</script>
+</body></html>
