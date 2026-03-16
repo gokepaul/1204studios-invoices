@@ -879,7 +879,7 @@ function rSettings(){
 <div class="pb fade">
   <div class="sg">
     <div>${Object.entries(tabs).map(([k,v])=>`<div class="sn-item ${t===k?'active':''}" onclick="S.stab='${k}';render()">${v}</div>`).join('')}</div>
-    <div>${t==='studio'?rSStudio():t==='terms'?rSTerms():t==='presets'?rSPresets():rSWm()}</div>
+    <div>${t==='studio'?rSStudio():t==='terms'?rSTerms():t==='presets'?rSPresets():t==='watermark'?rSWm():t==='coa'?rSCoA():t==='security'?rSSecurity():rSStudio()}</div>
   </div>
 </div>`;
 }
