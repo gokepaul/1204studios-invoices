@@ -571,6 +571,11 @@ function nextId(){
   const used=S.invoices.filter(i=>i.id.startsWith(prefix)).length;
   return prefix+String(used+1).padStart(3,'0');
 }
+// ── XSS prevention — escape user-supplied strings before innerHTML ──
+function esc(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function catToCoaCode(cat){
   const m={'Brand Design':'4100','Marketing Campaigns':'4200','Print Media':'4300','Design & Web Tutoring':'4400'};
   return m[cat]||'4900';
@@ -735,7 +740,7 @@ function rDash(){
     <div class="ch"><div class="ct">Recent Invoices</div><button class="btn btn-g btn-s" onclick="nav('invoices')">View All →</button></div>
     <table class="tbl"><thead><tr><th>Invoice</th><th>Client</th><th>Category</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>
     ${allInvs.slice(0,5).map(inv=>{const c2=calc(inv);return`<tr>
-      <td class="mono s">${inv.id}</td><td class="s">${inv.client}</td>
+      <td class="mono s">${esc(inv.id)}</td><td class="s">${esc(inv.client)}</td>
       <td><span class="tag">${inv.category}</span></td>
       <td class="s">${fc(c2.tot,inv.currency)}</td>
       <td>${fd(inv.due)}</td><td>${sbadge(inv.status)}</td>
@@ -791,7 +796,7 @@ ${!db?`<div style="margin:12px 36px 0;padding:11px 16px;background:rgba(242,100,
       const c2=calc(inv);const pct2=Math.round(c2.paid/Math.max(1,c2.tot)*100);
       return`<tr>
         <td class="mono s">${inv.id}</td>
-        <td><div style="font-weight:600;color:var(--text)">${inv.client}</div><div style="font-size:11.5px;color:var(--muted)">${inv.project}</div></td>
+        <td><div style="font-weight:600;color:var(--text)">${esc(inv.client)}</div><div style="font-size:11.5px;color:var(--muted)">${esc(inv.project)}</div></td>
         <td><span class="tag">${inv.category}</span></td>
         <td>${fd(inv.date)}</td><td>${fd(inv.due)}</td>
         <td class="s">${fc(c2.tot,inv.currency)}</td>
@@ -972,9 +977,9 @@ function rViewModal(){
   </div>
   <div class="mbody view-grid" style="display:grid;grid-template-columns:1fr 290px;gap:24px">
     <div>
-      <div class="fst" style="font-size:13px">${inv.project}</div>
+      <div class="fst" style="font-size:13px">${esc(inv.project)}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-        <div><div class="fl">Client</div><div style="font-weight:600;color:var(--text)">${inv.client}</div><div style="font-size:12px;color:var(--muted)">${inv.company}</div></div>
+        <div><div class="fl">Client</div><div style="font-weight:600;color:var(--text)">${esc(inv.client)}</div><div style="font-size:12px;color:var(--muted)">${esc(inv.company)}</div></div>
         <div><div class="fl">Contact</div><div style="font-size:13px;color:var(--dim)">${inv.email}</div><div style="font-size:12px;color:var(--muted)">${inv.phone}</div></div>
         <div><div class="fl">Issue Date</div><div style="font-size:13px;color:var(--dim)">${fd(inv.date)}</div></div>
         <div><div class="fl">Due Date</div><div style="font-size:13px;${inv.status==='overdue'?'color:var(--red);font-weight:600':''}">${fd(inv.due)}</div></div>
@@ -1020,7 +1025,7 @@ function rViewModal(){
         <div style="font-size:12px;color:var(--dim);margin-top:4px">${p.method}</div>
         ${p.ref?`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px">${p.ref}</div>`:''}
       </div>`).join('')}
-      ${inv.notes?`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px"><div class="fl" style="margin-bottom:6px">Notes</div><div style="font-size:12.5px;color:var(--dim)">${inv.notes}</div></div>`:''}
+      ${inv.notes?`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px"><div class="fl" style="margin-bottom:6px">Notes</div><div style="font-size:12.5px;color:var(--dim)">${esc(inv.notes)}</div></div>`:''}
     </div>
   </div>
 </div>
@@ -1097,15 +1102,15 @@ function rCreateModal(){
       <div class="fg"><label class="fl">Select Existing</label>
         <select class="fi" onchange="fillClient(this.value)"><option value="">— Select client —</option>${S.clients.map(c=>`<option value="${c.email}">${c.name}</option>`).join('')}</select></div>
       <div class="fr c2">
-        <div class="fg"><label class="fl">Client Name</label><input class="fi" value="${inv.client}" oninput="S.inv_form.client=this.value" placeholder="Full name"/></div>
-        <div class="fg"><label class="fl">Company</label><input class="fi" value="${inv.company}" oninput="S.inv_form.company=this.value" placeholder="Company"/></div>
+        <div class="fg"><label class="fl">Client Name</label><input class="fi" value="${esc(inv.client||'')}" oninput="S.inv_form.client=this.value" placeholder="Full name"/></div>
+        <div class="fg"><label class="fl">Company</label><input class="fi" value="${esc(inv.company||'')}" oninput="S.inv_form.company=this.value" placeholder="Company"/></div>
         <div class="fg"><label class="fl">Email</label><input class="fi" type="email" value="${inv.email}" oninput="S.inv_form.email=this.value" placeholder="email@co.com"/></div>
         <div class="fg"><label class="fl">Phone</label><input class="fi" value="${inv.phone}" oninput="S.inv_form.phone=this.value" placeholder="+234…"/></div>
       </div>
       <div class="fg"><label class="fl">Address</label><input class="fi" value="${inv.address}" oninput="S.inv_form.address=this.value" placeholder="Full address"/></div>
       <div class="divider"></div>
       <div class="fst">Project</div>
-      <div class="fg"><label class="fl">Project Name</label><input class="fi" value="${inv.project}" oninput="S.inv_form.project=this.value" placeholder="e.g. Brand Identity"/></div>
+      <div class="fg"><label class="fl">Project Name</label><input class="fi" value="${esc(inv.project||'')}" oninput="S.inv_form.project=this.value" placeholder="e.g. Brand Identity"/></div>
       <div class="fr c2">
         <div class="fg"><label class="fl">Category</label>
           <select class="fi" onchange="S.inv_form.category=this.value">${['Brand Design','Marketing Campaigns','Print Media','Design & Web Tutoring'].map(c=>`<option ${inv.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
@@ -1148,7 +1153,7 @@ function rCreateModal(){
         <div class="fg"><label class="fl">Payment Account</label>
           <select class="fi" onchange="S.inv_form.account=this.value">${S.accounts.map(a=>`<option value="${a.id}" ${inv.account===a.id?'selected':''}>${a.label}</option>`).join('')}</select></div>
       </div>
-      <div class="fg"><label class="fl">Notes</label><input class="fi" value="${inv.notes}" oninput="S.inv_form.notes=this.value" placeholder="Internal notes…"/></div>
+      <div class="fg"><label class="fl">Notes</label><input class="fi" value="${esc(inv.notes||'')}" oninput="S.inv_form.notes=this.value" placeholder="Internal notes…"/></div>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="checkbox" id="tc" ${inv.terms?'checked':''} onchange="S.inv_form.terms=this.checked" style="accent-color:var(--pink);width:14px;height:14px"/>
         <label for="tc" style="font-size:13px;color:var(--dim);cursor:pointer">Append default T&C to PDF</label>
@@ -1168,7 +1173,7 @@ function rPayModal(){
   <div class="mh"><div class="mt">Record Payment</div><div class="xbtn" onclick="closeModal()">✕</div></div>
   <div class="mbody">
     <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:20px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${inv.id} · ${inv.client}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${esc(inv.id)} · ${esc(inv.client)}</div>
       <div style="display:flex;justify-content:space-between">
         <div><div style="font-size:11px;color:var(--muted)">Total</div><div style="font-family:var(--display);font-size:18px;font-weight:700">${fc(c2.tot,inv.currency)}</div></div>
         <div><div style="font-size:11px;color:var(--muted)">Remaining</div><div style="font-family:var(--display);font-size:18px;font-weight:700;color:var(--orange)">${fc(c2.rem,inv.currency)}</div></div>
@@ -1549,7 +1554,7 @@ ${inv.terms?`
       <div>
         <div class="sig-line">
           <div class="sig-lbl">Client Signature & Date</div>
-          <div class="sig-name">${inv.client} · ${inv.company}</div>
+          <div class="sig-name">${esc(inv.client)} · ${esc(inv.company)}</div>
         </div>
       </div>
     </div>
@@ -1591,6 +1596,7 @@ async function dupInv(id){
   const inv=S.invoices.find(i=>i.id===id);if(!inv)return;
   const d=JSON.parse(JSON.stringify(inv));
   d.id=nextId();d.status='draft';d.payments=[];
+  d.items=(d.items||[]).map(i=>({...i,q:+i.q||1,p:+i.p||0}));
   d.date=new Date().toISOString().split('T')[0];
   d.due=new Date(Date.now()+14*864e5).toISOString().split('T')[0];
   S.invoices.unshift(d);render();
@@ -1752,8 +1758,8 @@ function rExpenses(){
       const acc=S.coa.find(a=>a.code===e.coa_code)||{};
       return`<tr>
         <td>${fd(e.date)}</td>
-        <td class="s">${e.description}</td>
-        <td style="color:var(--dim)">${e.supplier||'—'}</td>
+        <td class="s">${esc(e.description)}</td>
+        <td style="color:var(--dim)">${esc(e.supplier||'—')}</td>
         <td><span class="tag">${acc.code||'—'} ${acc.name||''}</span></td>
         <td class="s" style="color:var(--red)">−${fc(e.amount,'NGN')}</td>
         <td style="font-size:12px;color:var(--muted)">${e.receipt||'—'}</td>
