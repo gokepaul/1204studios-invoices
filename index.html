@@ -1898,24 +1898,24 @@ function rPL(){
   const grossMargin       = totalRevCollected>0?Math.round(grossProfit/totalRevCollected*100):0;
 
   // Export CSV
-  const csvRows = [
-    ['Account Code','Account Name','Type','Amount (NGN)'],
-    ...Object.values(revByAcc).map(r=>[r.code,r.name,'Revenue',r.collected]),
-    ['','TOTAL REVENUE','',totalRevCollected],
-    ['','','',''],
-    ...Object.values(expByAcc).map(e=>[e.code,e.name,'Expense',e.total]),
-    ['','TOTAL EXPENSES','',totalExpenses],
-    ['','','',''],
-    ['','GROSS PROFIT','',grossProfit],
-    ['','GROSS MARGIN','',grossMargin+'%'],
-  ];
-  const csv = csvRows.map(r=>r.join(',')).join('
-');
-
+    S._plExportData = {
+    rows: [
+      ['Account Code','Account Name','Type','Amount (NGN)'],
+      ...Object.values(revByAcc).map(r=>[r.code,r.name,'Revenue',r.collected]),
+      ['','TOTAL REVENUE','',totalRevCollected],
+      ['','','',''],
+      ...Object.values(expByAcc).map(e=>[e.code,e.name,'Expense',e.total]),
+      ['','TOTAL EXPENSES','',totalExpenses],
+      ['','','',''],
+      ['','GROSS PROFIT','',grossProfit],
+      ['','GROSS MARGIN %','',grossMargin],
+    ],
+    period,
+  };
   return `
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
   <div style="font-family:var(--display);font-size:15px;font-weight:700;color:var(--text)">Profit & Loss — ${period}</div>
-  <button class="btn btn-g btn-s" onclick="downloadCSV('PL_${period.replace(/\s/g,'_')}',\`${csv.replace(/`/g,"'")}\`)">⬇ Export CSV</button>
+  <button class="btn btn-g btn-s" onclick="exportPL()">⬇ Export CSV</button>
 </div>
 
 <!-- Revenue section -->
@@ -2086,6 +2086,13 @@ function openAddCOAAccount(){
     </div>
   </div>`;
   document.body.appendChild(div);
+}
+
+function exportPL(){
+  if(!S._plExportData) return;
+  const rows = S._plExportData.rows;
+  const csv  = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  downloadCSV('PL_'+S._plExportData.period.replace(/\s+/g,'_'), csv);
 }
 
 function downloadCSV(filename, csv){
