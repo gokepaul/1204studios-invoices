@@ -114,7 +114,7 @@ textarea.fi{resize:vertical;min-height:80px;line-height:1.6;}
 .sw input::placeholder{color:var(--muted);}
 .sw input:focus{border-color:var(--pink);outline:none;}
 .si{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;}
-.fs{background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--dim);cursor:pointer;min-width:130px;appearance:auto;}
+.fs{background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;padding:8px 32px 8px 12px;font-size:13px;color:var(--dim);cursor:pointer;min-width:130px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
 .fs:focus{outline:none;border-color:var(--pink);}
 .cg{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;}
 .cc{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:16px;}
@@ -419,12 +419,14 @@ const S={
 
 // ── Supabase config ──
 // Replace these two values with your own from supabase.com → Project Settings → API
-const SB_URL = 'YOUR_SUPABASE_URL';
-const SB_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// ── SUPABASE CONFIG ──
+// Paste your credentials here to hardcode them permanently,
+// OR leave as placeholders and use Settings → Connect to configure at runtime.
+const SB_URL_HARD = 'YOUR_SUPABASE_URL';   // e.g. 'https://xxxx.supabase.co'
+const SB_KEY_HARD = 'YOUR_SUPABASE_ANON_KEY'; // e.g. 'eyJhbGci...'
 
 let db = null;
 function initSupabase(){
-  // Called manually; boot sequence handles auto-init from saved creds
   return db;
 }
 
@@ -550,9 +552,9 @@ function saveState(){ lsSave(); } // lightweight local save for instant feedback
 })();
 
 // Override SB_URL/SB_KEY with saved values if present
-const _resolvedUrl = window._SB_URL || SB_URL;
-const _resolvedKey = window._SB_KEY || SB_KEY;
-if(_resolvedUrl !== 'YOUR_SUPABASE_URL'){
+const _resolvedUrl = window._SB_URL || SB_URL_HARD;
+const _resolvedKey = window._SB_KEY || SB_KEY_HARD;
+if(_resolvedUrl && _resolvedUrl !== 'YOUR_SUPABASE_URL'){
   try{ db = window.supabase.createClient(_resolvedUrl, _resolvedKey); }catch(e){ db = null; }
 }
 
@@ -649,13 +651,13 @@ function rDash(){
 <div class="ph fade">
   <div><div class="pt">Dashboard</div><div class="ps">Financial overview · ${getPeriodLabel()}</div></div>
   <div style="display:flex;gap:10px;align-items:center">
-    <select class="fs" onchange="S.fperiod=this.value;resetCharts();render()">
-      <option value="today">Today</option>
-      <option value="week">This Week</option>
-      <option value="month">This Month</option>
-      <option value="quarter">This Quarter</option>
-      <option value="year" selected>This Year</option>
-      <option value="all">All Time</option>
+    <select class="fs" onchange="S.fperiod=this.value;resetCharts();render()" value="${S.fperiod}">
+      <option value="today" ${S.fperiod==='today'?'selected':''}>Today</option>
+      <option value="week"  ${S.fperiod==='week'?'selected':''}>This Week</option>
+      <option value="month" ${S.fperiod==='month'?'selected':''}>This Month</option>
+      <option value="quarter" ${S.fperiod==='quarter'?'selected':''}>This Quarter</option>
+      <option value="year" ${S.fperiod==='year'?'selected':''}>This Year</option>
+      <option value="all"  ${S.fperiod==='all'?'selected':''}>All Time</option>
     </select>
     <button class="btn btn-p" onclick="openNew()">+ New Invoice</button>
   </div>
@@ -774,7 +776,8 @@ ${!db?`<div style="margin:12px 36px 0;padding:11px 16px;background:rgba(242,100,
       <option value="all">All Categories</option><option>Brand Design</option><option>Marketing Campaigns</option>
       <option>Print Media</option><option>Design &amp; Web Tutoring</option>
     </select>
-    <button class="btn btn-dl btn-s" onclick="dlAllInvoices(f)" style="white-space:nowrap;flex-shrink:0">⬇ All (${f.length})</button>
+    <button class="btn btn-dl btn-s" onclick="dlAllInvoices(f)" style="white-space:nowrap;flex-shrink:0">⬇ PDF All</button>
+    <button class="btn btn-s" style="background:#1a7340;color:#fff;border:none;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer;white-space:nowrap" onclick="exportAllInvoices(true)">Sheets</button>
   </div>
   <div class="card">
     ${f.length===0?`<div style="text-align:center;padding:52px 20px">
@@ -884,15 +887,16 @@ function rSStudio(){const c=S.cfg;return`
   <div class="fr c2">
     <div class="fg" style="margin-bottom:0">
       <label class="fl">Supabase URL</label>
-      <input class="fi" id="sb-url" value="\${SB_URL!=='YOUR_SUPABASE_URL'?SB_URL:''}" placeholder="https://xxxx.supabase.co" style="font-family:var(--mono);font-size:12px"/>
+      <input class="fi" id="sb-url" value="\${SB_URL_HARD!=='YOUR_SUPABASE_URL'?SB_URL_HARD:(localStorage.getItem('1204sb_url')||'')}"  placeholder="https://xxxx.supabase.co" style="font-family:var(--mono);font-size:12px"/>
     </div>
     <div class="fg" style="margin-bottom:0">
       <label class="fl">Supabase Anon Key</label>
-      <input class="fi" id="sb-key" type="password" value="\${SB_KEY!=='YOUR_SUPABASE_ANON_KEY'?SB_KEY:''}" placeholder="eyJhbGciOiJ..." style="font-family:var(--mono);font-size:12px"/>
+      <input class="fi" id="sb-key" type="password" value="\${SB_KEY_HARD!=='YOUR_SUPABASE_ANON_KEY'?SB_KEY_HARD:(localStorage.getItem('1204sb_key')||'')}"  placeholder="eyJhbGciOiJ..." style="font-family:var(--mono);font-size:12px"/>
     </div>
   </div>
   <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
     <button class="btn btn-p btn-s" onclick="connectSupabase()">Connect &amp; Sync</button>
+    <button class="btn btn-g btn-s" onclick="nav('reports')" style="margin-left:4px">View Reports →</button>
     <div style="font-size:11.5px;color:var(--muted)">Changes saved here persist in the app only — add them to your vercel.json env vars for permanent config.</div>
   </div>
 </div>
@@ -1726,7 +1730,11 @@ function rExpenses(){
   return `
 <div class="ph fade">
   <div><div class="pt">Expenses</div><div class="ps">${S.expenses.length} total · ${fc(totalExp,'NGN')} logged</div></div>
-  <button class="btn btn-p" onclick="openAddExpense()">+ Log Expense</button>
+  <div style="display:flex;gap:6px;align-items:center">
+    <button class="btn btn-g btn-s" onclick="exportExpenses(false)" title="Download CSV">⬇ CSV</button>
+    <button class="btn btn-s" style="background:#1a7340;color:#fff;border:none;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer" onclick="exportExpenses(true)" title="Open in Google Sheets">Sheets</button>
+    <button class="btn btn-p" onclick="openAddExpense()">+ Log Expense</button>
+  </div>
 </div>
 <div class="pb fade">
   <div class="filters">
@@ -1838,10 +1846,10 @@ function rReports(){
 <div class="ph fade">
   <div><div class="pt">Financial Reports</div><div class="ps">Auto-generated from invoices + expenses</div></div>
   <select class="fs" onchange="S.fperiod=this.value;render()">
-    <option value="month">This Month</option>
-    <option value="quarter">This Quarter</option>
-    <option value="year" selected>This Year</option>
-    <option value="all">All Time</option>
+    <option value="month"   ${S.fperiod==='month'?'selected':''}>This Month</option>
+    <option value="quarter" ${S.fperiod==='quarter'?'selected':''}>This Quarter</option>
+    <option value="year"    ${S.fperiod==='year'||(!S.fperiod)?'selected':''}>This Year</option>
+    <option value="all"     ${S.fperiod==='all'?'selected':''}>All Time</option>
   </select>
 </div>
 <div class="pb fade">
@@ -1915,7 +1923,13 @@ function rPL(){
   return `
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
   <div style="font-family:var(--display);font-size:15px;font-weight:700;color:var(--text)">Profit & Loss — ${period}</div>
-  <button class="btn btn-g btn-s" onclick="exportPL()">⬇ Export CSV</button>
+  <div style="display:flex;gap:6px">
+  <button class="btn btn-g btn-s" onclick="exportPL(false)">⬇ CSV</button>
+  <button class="btn btn-s" style="background:#1a7340;color:#fff;border:none;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px" onclick="exportPL(true)">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19.416 6.547L14.453 1.584A2 2 0 0013.04 1H6a2 2 0 00-2 2v18a2 2 0 002 2h12a2 2 0 002-2V7.96a2 2 0 00-.584-1.413zM13 2.5l5.5 5.5H14a1 1 0 01-1-1V2.5zM16 13H8v-1h8v1zm0 3H8v-1h8v1zm-4 3H8v-1h4v1z"/></svg>
+    Google Sheets
+  </button>
+</div>
 </div>
 
 <!-- Revenue section -->
@@ -2088,20 +2102,69 @@ function openAddCOAAccount(){
   document.body.appendChild(div);
 }
 
-function exportPL(){
+// ── GOOGLE SHEETS EXPORT ──
+// Builds CSV data and opens it directly in Google Sheets via the import URL.
+// The user must be signed in to Google — Sheets opens and offers to import.
+function buildCSV(rows){
+  return rows.map(r=>r.map(v=>{
+    const s=String(v===null||v===undefined?'':v);
+    return s.includes(',')||s.includes('"')||s.includes('\n') ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(',')).join('\r\n');
+}
+
+function openInGoogleSheets(filename, rows){
+  const csv   = buildCSV(rows);
+  const blob  = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url   = URL.createObjectURL(blob);
+  // Download CSV first, then open Sheets import — cleanest cross-browser approach
+  const a = document.createElement('a');
+  a.href = url; a.download = filename+'.csv'; a.click();
+  setTimeout(()=>{
+    URL.revokeObjectURL(url);
+    window.open('https://docs.google.com/spreadsheets/create','_blank');
+    notify('CSV downloaded — drag it into the new Google Sheet that just opened ✓');
+  }, 800);
+}
+
+function exportPL(toSheets){
   if(!S._plExportData) return;
   const rows = S._plExportData.rows;
-  const csv  = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-  downloadCSV('PL_'+S._plExportData.period.replace(/\s+/g,'_'), csv);
+  const name = 'PL_'+S._plExportData.period.replace(/\s+/g,'_');
+  if(toSheets){ openInGoogleSheets(name, rows); }
+  else { downloadCSV(name, buildCSV(rows)); }
+}
+function exportExpenses(toSheets){
+  const rows = [
+    ['Date','Description','Supplier','COA Code','Account','Amount (NGN)','Method','Receipt'],
+    ...S.expenses.map(e=>{
+      const acc=S.coa.find(a=>a.code===e.coa_code)||{name:''};
+      return [e.date,e.description||'',e.supplier||'',e.coa_code||'',acc.name,e.amount,e.method||'',e.receipt||''];
+    })
+  ];
+  const name = 'Expenses_'+new Date().getFullYear();
+  if(toSheets){ openInGoogleSheets(name, rows); }
+  else { downloadCSV(name, buildCSV(rows)); }
+}
+function exportAllInvoices(toSheets){
+  const rows = [
+    ['Invoice #','Date','Due Date','Client','Company','Category','Subtotal','Discount%','VAT%','Total','Paid','Balance','Status'],
+    ...S.invoices.map(inv=>{
+      const c2=calc(inv);
+      return [inv.id,inv.date,inv.due,inv.client,inv.company||'',inv.category,c2.sub,inv.discount,inv.tax,c2.tot,c2.paid,c2.rem,inv.status];
+    })
+  ];
+  const name = 'Invoices_All';
+  if(toSheets){ openInGoogleSheets(name, rows); }
+  else { downloadCSV(name, buildCSV(rows)); }
 }
 
 function downloadCSV(filename, csv){
-  const blob=new Blob([csv],{type:'text/csv'});
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}); // BOM for Excel/Sheets compat
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url; a.download=filename+'.csv'; a.click();
-  URL.revokeObjectURL(url);
-  notify('CSV exported ✓');
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  notify('CSV downloaded ✓');
 }
 
 // ── bulk download ──
@@ -2229,7 +2292,7 @@ function render(){
     </button>
     <div class="sb-ft" style="font-size:9px;margin-top:5px;display:flex;align-items:center;gap:5px">
       <span style="width:6px;height:6px;border-radius:50%;background:\${db?'var(--green)':'rgba(240,236,230,.25)'};display:inline-block;flex-shrink:0"></span>
-      \${db?'Cloud sync':'Local only'}
+      \${db?'Cloud sync on':'Local — connect DB'}
     </div></div>
 </div>
 <div class="main-wrap"><div class="main">${page}</div></div>
