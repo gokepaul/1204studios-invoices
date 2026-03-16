@@ -275,7 +275,7 @@ textarea.fi{resize:vertical;min-height:80px;line-height:1.6;}
   .cc canvas{max-height:150px !important;}
 
   /* Tables — scrollable container */
-  .card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .card{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;}
   .tbl{min-width:580px;}
   .tbl td,.tbl th{padding:9px 12px;}
 
@@ -873,7 +873,7 @@ function rAccounts(){
 // ── settings ──
 function rSettings(){
   const t=S.stab;
-  const tabs={studio:'Studio Info',terms:'Default Terms',presets:'Service Presets',watermark:'Watermark & PDF',coa:'Chart of Accounts'};
+  const tabs={studio:'Studio Info',terms:'Default Terms',presets:'Service Presets',watermark:'Watermark & PDF',coa:'Chart of Accounts',security:'Security'};
   return`
 <div class="ph fade"><div><div class="pt">Settings</div><div class="ps">Studio configuration and defaults</div></div></div>
 <div class="pb fade">
@@ -1860,12 +1860,13 @@ function rReports(){
 </div>
 <div class="pb fade">
   <div style="display:flex;gap:2px;margin-bottom:20px;background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:4px;">
-    ${[['pl','P&L Statement'],['bs','Balance Sheet'],['coa','Chart of Accounts']].map(([id,label])=>`
+    ${[['pl','P&L Statement'],['tb','Trial Balance'],['bs','Balance Sheet'],['coa','Chart of Accounts']].map(([id,label])=>`
     <button onclick="S.reportTab='${id}';render()" style="flex:1;padding:8px 12px;border-radius:7px;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:all .15s;background:${tab===id?'var(--pink)':'transparent'};color:${tab===id?'#fff':'var(--dim)'}">
       ${label}
     </button>`).join('')}
   </div>
   ${tab==='pl'   ? rPL()   : ''}
+  ${tab==='tb'   ? rTB()   : ''}
   ${tab==='bs'   ? rBS()   : ''}
   ${tab==='coa'  ? rCOA()  : ''}
 </div>`;
@@ -2021,6 +2022,161 @@ function rBS(){
 </div>`;
 }
 
+function rTB(){
+  // ── Build Trial Balance ──
+  // Convention: Assets & Expenses = Debit normal balance
+  //             Liabilities, Equity, Revenue = Credit normal balance
+  const period = getPeriodLabel();
+  const invs   = getPeriodInvoices().filter(i=>i.status!=='cancelled'&&i.status!=='draft');
+  const exps   = getPeriodExpenses();
+
+  // Revenue by COA account (credit side)
+  const revMap = {};
+  invs.forEach(inv=>{
+    const code = catToCoaCode(inv.category);
+    revMap[code] = (revMap[code]||0) + calc(inv).paid;
+  });
+
+  // Expenses by COA account (debit side)
+  const expMap = {};
+  exps.forEach(e=>{
+    expMap[e.coa_code] = (expMap[e.coa_code]||0) + (+e.amount||0);
+  });
+
+  // Receivables — unpaid invoice balances go to 1200 Accounts Receivable
+  const receivable = invs.reduce((s,i)=>s+calc(i).rem,0);
+
+  // Build rows across all COA accounts
+  const rows = S.coa.map(acc=>{
+    let debit = 0, credit = 0;
+    if(acc.type==='Revenue'){
+      credit = revMap[acc.code]||0;
+    } else if(acc.type==='Expense'){
+      debit = expMap[acc.code]||0;
+    } else if(acc.code==='1200'){
+      debit = receivable; // Accounts Receivable
+    } else if(acc.code==='1100'){
+      debit = invs.reduce((s,i)=>s+calc(i).paid,0); // Cash collected → 1100
+    }
+    const balance = debit - credit;
+    return { acc, debit, credit, balance };
+  }).filter(r=>r.debit>0||r.credit>0); // only show accounts with activity
+
+  const totalDebit  = rows.reduce((s,r)=>s+r.debit,0);
+  const totalCredit = rows.reduce((s,r)=>s+r.credit,0);
+  const balanced    = Math.abs(totalDebit-totalCredit)<1; // allow rounding
+
+  // Group by type
+  const typeOrder = ['Asset','Liability','Equity','Revenue','Expense'];
+  const typeColors = {Asset:'var(--cyan)',Liability:'var(--orange)',Equity:'var(--purple)',Revenue:'var(--green)',Expense:'var(--red)'};
+
+  // Export rows
+  S._tbExportData = {
+    rows:[
+      ['Code','Account','Type','Debit (NGN)','Credit (NGN)','Balance'],
+      ...rows.map(r=>[r.acc.code,r.acc.name,r.acc.type,r.debit||'',r.credit||'',r.balance]),
+      ['','','','','',''],
+      ['','TOTALS','',totalDebit,totalCredit,totalDebit-totalCredit],
+    ],
+    period
+  };
+
+  return `
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+  <div>
+    <div style="font-family:var(--display);font-size:15px;font-weight:700;color:var(--text)">Trial Balance — ${period}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">Showing accounts with transactions only</div>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <span style="font-size:12px;padding:5px 12px;border-radius:20px;font-weight:600;background:${balanced?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)'};color:${balanced?'var(--green)':'var(--red)'}">
+      ${balanced?'✓ Balanced':'⚠ Out of balance'}
+    </span>
+    <button class="btn btn-g btn-s" onclick="exportTB(false)">⬇ CSV</button>
+    <button class="btn btn-s" style="background:#1a7340;color:#fff;border:none;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer" onclick="exportTB(true)">Sheets</button>
+  </div>
+</div>
+
+${rows.length===0?`<div class="card" style="padding:40px;text-align:center">
+  <div style="font-size:13px;color:var(--muted)">No transactions in this period — create invoices and log expenses to populate the trial balance.</div>
+</div>`:`
+
+<!-- Debit/Credit table -->
+<div class="card" style="margin-bottom:14px">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Account Name</th>
+        <th>Type</th>
+        <th style="text-align:right">Debit (₦)</th>
+        <th style="text-align:right">Credit (₦)</th>
+        <th style="text-align:right">Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+    ${typeOrder.map(type=>{
+      const typeRows=rows.filter(r=>r.acc.type===type);
+      if(!typeRows.length) return '';
+      const typeTotalD=typeRows.reduce((s,r)=>s+r.debit,0);
+      const typeTotalC=typeRows.reduce((s,r)=>s+r.credit,0);
+      return `
+        <tr><td colspan="6" style="background:var(--bg3);padding:6px 12px">
+          <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${typeColors[type]}">${type}s</span>
+        </td></tr>
+        ${typeRows.map(r=>`<tr>
+          <td class="mono" style="color:var(--muted);font-size:12px">${r.acc.code}</td>
+          <td class="s">${r.acc.name}</td>
+          <td style="font-size:11px;color:var(--muted)">${r.acc.sub}</td>
+          <td style="text-align:right;color:${r.debit>0?'var(--text)':'var(--muted)'};font-weight:${r.debit>0?'600':'400'}">${r.debit>0?fc(r.debit,'NGN'):'—'}</td>
+          <td style="text-align:right;color:${r.credit>0?'var(--text)':'var(--muted)'};font-weight:${r.credit>0?'600':'400'}">${r.credit>0?fc(r.credit,'NGN'):'—'}</td>
+          <td style="text-align:right;color:${r.balance>=0?'var(--cyan)':'var(--red)'}">
+            ${r.balance>=0?fc(r.balance,'NGN'):'('+fc(Math.abs(r.balance),'NGN')+')'}
+          </td>
+        </tr>`).join('')}
+        <tr style="background:var(--bg3);font-weight:600">
+          <td colspan="3" style="padding:7px 12px;font-size:11px;color:var(--muted)">Subtotal — ${type}s</td>
+          <td style="text-align:right;padding:7px 12px">${typeTotalD>0?fc(typeTotalD,'NGN'):'—'}</td>
+          <td style="text-align:right;padding:7px 12px">${typeTotalC>0?fc(typeTotalC,'NGN'):'—'}</td>
+          <td style="text-align:right;padding:7px 12px">${fc(Math.abs(typeTotalD-typeTotalC),'NGN')}</td>
+        </tr>`;
+    }).join('')}
+    </tbody>
+    <tfoot>
+      <tr style="background:var(--bg4);border-top:2px solid var(--bd2)">
+        <td colspan="3" style="padding:12px 12px;font-weight:700;font-size:13px">TOTALS</td>
+        <td style="text-align:right;padding:12px;font-family:var(--mono);font-weight:700;color:var(--text)">${fc(totalDebit,'NGN')}</td>
+        <td style="text-align:right;padding:12px;font-family:var(--mono);font-weight:700;color:var(--text)">${fc(totalCredit,'NGN')}</td>
+        <td style="text-align:right;padding:12px;font-weight:700;color:${balanced?'var(--green)':'var(--red)'}">
+          ${balanced?'✓ Nil':fc(Math.abs(totalDebit-totalCredit),'NGN')}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+<!-- Accounting equation check -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px" class="fr">
+  <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:16px 18px">
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Total Debits</div>
+    <div style="font-family:var(--display);font-size:22px;font-weight:700;color:var(--text)">${fc(totalDebit,'NGN')}</div>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:16px 18px">
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Total Credits</div>
+    <div style="font-family:var(--display);font-size:22px;font-weight:700;color:var(--text)">${fc(totalCredit,'NGN')}</div>
+  </div>
+</div>
+<div style="font-size:11.5px;color:var(--muted);padding:10px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--bd)">
+  ℹ Trial balance uses cash basis accounting — revenue shows collected amounts, not invoiced totals. Accounts Receivable (1200) reflects outstanding balances. Export to CSV and share with your accountant for full accrual adjustments.
+</div>`}`;
+}
+
+function exportTB(toSheets){
+  if(!S._tbExportData) { render(); return; }
+  const name = 'TrialBalance_'+S._tbExportData.period.replace(/\s+/g,'_');
+  if(toSheets){ openInGoogleSheets(name, S._tbExportData.rows); }
+  else { downloadCSV(name, buildCSV(S._tbExportData.rows)); }
+}
+
 function rCOA(){
   const types=['Asset','Liability','Equity','Revenue','Expense'];
   return `
@@ -2047,6 +2203,48 @@ ${types.map(type=>{
     </tbody></table>
   </div>`;
 }).join('')}`;
+}
+
+function rSSecurity(){
+  return `
+<div class="fst">Change Passcode</div>
+<div style="font-size:13px;color:var(--dim);margin-bottom:20px;line-height:1.6">
+  The app passcode protects the login screen. Choose something memorable but not obvious.
+  Current passcode is stored in the app code — changing it here updates it for this session only.
+  To make it permanent, update the <span style="font-family:var(--mono);font-size:12px;color:var(--cyan)">PASSCODE</span> constant in index.html and redeploy.
+</div>
+<div class="fr c2" style="margin-bottom:16px">
+  <div class="fg"><label class="fl">Current Passcode</label>
+    <input class="fi" type="password" id="sec-cur" placeholder="Current passcode"/></div>
+  <div class="fg" style="grid-column:1/-1"><label class="fl">New Passcode (min 8 characters)</label>
+    <input class="fi" type="password" id="sec-new" placeholder="New passcode" minlength="8"/></div>
+  <div class="fg" style="grid-column:1/-1"><label class="fl">Confirm New Passcode</label>
+    <input class="fi" type="password" id="sec-con" placeholder="Confirm new passcode"/></div>
+</div>
+<button class="btn btn-p btn-s" onclick="changePasscode()">Update Passcode</button>
+<div style="margin-top:30px;padding-top:24px;border-top:1px solid var(--bd)">
+  <div class="fst">Session</div>
+  <div style="font-size:13px;color:var(--dim);margin-bottom:14px">Sessions expire after 8 hours automatically. You can sign out manually at any time using the button in the sidebar.</div>
+  <button class="btn btn-g btn-s" onclick="logout()">Sign Out Now</button>
+</div>`;
+}
+
+function changePasscode(){
+  const cur = document.getElementById('sec-cur')?.value;
+  const nw  = document.getElementById('sec-new')?.value;
+  const con = document.getElementById('sec-con')?.value;
+  if(cur !== PASSCODE){ notify('Current passcode is incorrect','err'); return; }
+  if(!nw||nw.length<8){ notify('New passcode must be at least 8 characters','err'); return; }
+  if(nw!==con){ notify('Passcodes do not match','err'); return; }
+  // Update in memory for this session
+  window.PASSCODE = nw;
+  // Show the permanent update instructions
+  notify('Passcode updated for this session ✓ — redeploy to make permanent');
+  // Clear fields
+  ['sec-cur','sec-new','sec-con'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
 }
 
 function rSCoA(){
@@ -2119,17 +2317,27 @@ function buildCSV(rows){
 }
 
 function openInGoogleSheets(filename, rows){
-  const csv   = buildCSV(rows);
-  const blob  = new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const url   = URL.createObjectURL(blob);
-  // Download CSV first, then open Sheets import — cleanest cross-browser approach
+  // Build CSV with UTF-8 BOM so Google Sheets reads Nigerian characters correctly
+  const csv  = buildCSV(rows);
+  const bom  = '\uFEFF';
+  const blob = new Blob([bom + csv], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+
+  // Step 1 — trigger download
   const a = document.createElement('a');
-  a.href = url; a.download = filename+'.csv'; a.click();
+  a.href = url;
+  a.download = filename + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // Step 2 — open Google Sheets import page in new tab
+  // The user clicks File → Import → Upload → select the downloaded file
   setTimeout(()=>{
     URL.revokeObjectURL(url);
-    window.open('https://docs.google.com/spreadsheets/create','_blank');
-    notify('CSV downloaded — drag it into the new Google Sheet that just opened ✓');
-  }, 800);
+    window.open('https://sheets.new','_blank');
+    notify('File downloaded. In the new Sheet: File → Import → Upload → select the CSV ✓');
+  }, 600);
 }
 
 function exportPL(toSheets){
@@ -2184,7 +2392,7 @@ function dlAllInvoices(invList){
 
 // ── auth ──
 const AUTH_KEY = '1204studios_auth_v1';
-const PASSCODE  = '1204admin'; // change this — store hashed in production
+var PASSCODE  = '1204admin'; // Change this value then redeploy to set permanently // change this — store hashed in production
 
 function checkStoredAuth(){
   try{
@@ -2197,7 +2405,7 @@ function checkStoredAuth(){
 
 function submitAuth(){
   const val = document.getElementById('auth-input')?.value?.trim();
-  if(val === PASSCODE){
+  if(val === (window.PASSCODE||PASSCODE)){
     S.authed = true;
     S.authErr = '';
     try{ localStorage.setItem(AUTH_KEY, Date.now().toString()); }catch(e){}
