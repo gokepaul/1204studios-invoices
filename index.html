@@ -452,15 +452,9 @@ function lsLoad(){
 async function sbUpsertInvoice(inv){
   if(!db) return lsSave();
   const row = {...inv, items:JSON.stringify(inv.items||[]), payments:JSON.stringify(inv.payments||[])};
-  if(inv.version!=null){
-    // Use smartSave for records that have a version (after DB migration)
-    await smartSave('invoices', inv, row);
-  } else {
-    // Legacy: full upsert, set version=1
-    const {error} = await db.from('invoices').upsert({...row,version:1},{onConflict:'id'});
-    if(!error) inv.version=1;
-    lsSave();
-  }
+  const {error} = await db.from('invoices').upsert(row, {onConflict:'id'});
+  if(error) console.error('upsertInvoice', error.message);
+  lsSave();
 }
 async function sbDeleteInvoice(id){
   if(!db) return lsSave();
@@ -469,15 +463,21 @@ async function sbDeleteInvoice(id){
 }
 async function sbUpsertClient(cl){
   if(!db) return lsSave();
-  await smartSave('clients', cl, cl);
+  const {error} = await db.from('clients').upsert(cl, {onConflict:'id'});
+  if(error) console.error('upsertClient', error.message);
+  lsSave();
 }
 async function sbUpsertAccount(acc){
   if(!db) return lsSave();
-  await smartSave('accounts', acc, acc);
+  const {error} = await db.from('accounts').upsert(acc, {onConflict:'id'});
+  if(error) console.error('upsertAccount', error.message);
+  lsSave();
 }
 async function sbUpsertExpense(exp){
   if(!db) return lsSave();
-  await smartSave('expenses', exp, exp);
+  const {error} = await db.from('expenses').upsert(exp, {onConflict:'id'});
+  if(error) console.error('upsertExpense', error.message);
+  lsSave();
 }
 async function sbDeleteExpense(id){
   if(!db) return lsSave();
@@ -505,45 +505,7 @@ async function sbSavePresets(presets){
   lsSave();
 }
 
-// ── SAFE PARTIAL UPDATE — replaces full-row upsert for existing records ──
-// Only sends fields that changed + increments version.
-// Returns { ok:true, newVersion } | { ok:false, conflict:true } | { ok:false, error }
-async function patchRow(table, id, currentVersion, changedFields){
-  if(!db) return { ok:false, error:'no db' };
-  const {data,error} = await db
-    .from(table)
-    .update({ ...changedFields, version: currentVersion + 1 })
-    .eq('id', id)
-    .eq('version', currentVersion)   // atomic: only matches if nobody else saved
-    .select('id,version')
-    .single();
-  if(error){
-    if(error.code==='40001'||error.code==='PGRST116') return {ok:false,conflict:true};
-    return {ok:false,error};
-  }
-  if(!data) return {ok:false,conflict:true};
-  return {ok:true,newVersion:data.version};
-}
-
-// smartSave: uses patchRow if version exists, falls back to upsert for legacy rows
-async function smartSave(table, record, changedFields){
-  if(record.version!=null){
-    const r = await patchRow(table, record.id, record.version, changedFields);
-    if(r.ok){ record.version = r.newVersion; lsSave(); return r; }
-    if(r.conflict){
-      // Re-fetch server state
-      const {data:fresh} = await db.from(table).select('*').eq('id',record.id).single();
-      if(fresh) Object.assign(record, fresh);
-      notify('⚠ Record was updated by someone else — reloaded latest version','err');
-      render();
-    }
-    return r;
-  }
-  // Legacy path (no version yet) — upsert once and set version=1
-  const {error} = await db.from(table).upsert({...record,...changedFields,version:1},{onConflict:'id'});
-  if(!error){ record.version=1; lsSave(); }
-  return {ok:!error,error};
-}
+// patchRow/smartSave removed — using direct upserts
 
 // ── Load all data from Supabase on startup ──
 async function loadFromSupabase(){
@@ -1832,7 +1794,8 @@ async function connectSupabase(){
 // Supabase upsert for contracts
 async function sbUpsertContract(ct){
   if(!db) return;
-  try{ await smartSave('contracts', ct, ct); }catch(e){}
+  const {error} = await db.from('contracts').upsert({...ct}, {onConflict:'id'});
+  if(error) console.error('upsertContract', error.message);
 }
 async function sbDeleteContract(id){
   if(!db) return;
