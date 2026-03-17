@@ -363,11 +363,7 @@ const S={
   modal:null,editing:null,viewing:null,inv_form:null,dbLoading:false,authed:false,authErr:'',reportTab:'pl',
   invoices:[],
   clients:[],
-  accounts:[
-    {id:'ngn-gtbank',label:'NGN — GTBank',bank:'',aname:'',anum:'',swift:'',currency:'NGN',instr:'Please include invoice number as payment reference.'},
-    {id:'usd-account',label:'USD — Bank / Wise',bank:'',aname:'',anum:'',swift:'',currency:'USD',instr:'USD transfers. Include invoice number in reference.'},
-    {id:'gbp-account',label:'GBP — Bank / Wise',bank:'',aname:'',anum:'',swift:'',currency:'GBP',instr:'GBP transfers. Include invoice number in reference.'},
-  ],
+  accounts:[], // loaded from Supabase accounts table
   presets:[
     {name:'Brand Identity Design',price:850000,cur:'NGN'},
     {name:'Logo Design',price:280000,cur:'NGN'},
@@ -852,6 +848,33 @@ function rClients(){
 }
 
 // ── accounts ──
+function editAccount(id){
+  const a=S.accounts.find(x=>x.id===id);
+  if(!a) return;
+  S.modal='addacc';
+  // Pre-fill the modal when it opens — use a flag
+  S._editingAcc=id;
+  render();
+  // Fill fields after render
+  setTimeout(()=>{
+    const g=id=>document.getElementById(id);
+    if(g('na-lb')) g('na-lb').value=a.label||'';
+    if(g('na-bk')) g('na-bk').value=a.bank||'';
+    if(g('na-an')) g('na-an').value=a.aname||'';
+    if(g('na-nu')) g('na-nu').value=a.anum||'';
+    if(g('na-sw')) g('na-sw').value=a.swift||'';
+    if(g('na-in')) g('na-in').value=a.instr||'';
+    if(g('na-cu')) g('na-cu').value=a.currency||'NGN';
+  },50);
+}
+async function deleteAccount(id){
+  if(!confirm('Delete this account?')) return;
+  S.accounts=S.accounts.filter(a=>a.id!==id);
+  lsSave();
+  if(db) try{ await db.from('accounts').delete().eq('id',id); }catch(e){}
+  notify('Account deleted');
+  render();
+}
 function rAccounts(){
   return`
 <div class="ph fade">
@@ -863,7 +886,11 @@ function rAccounts(){
   ${S.accounts.map(a=>`
   <div class="card">
     <div class="ch">
-      <div><div class="ct">${a.label}</div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">${a.currency} · ${a.bank}</div></div>
+      <div><div class="ct">${a.label}</div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">${a.currency}${a.bank?' · '+a.bank:''}</div></div>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-g btn-xs" onclick="editAccount('${a.id}')">Edit</button>
+        <button class="btn btn-d btn-xs" onclick="deleteAccount('${a.id}')">Delete</button>
+      </div>
     </div>
     <div class="acc-grid" style="padding:18px 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
       <div><div class="fl" style="margin-bottom:5px">Account Name</div><div style="font-size:13.5px;font-weight:600;color:var(--text)">${a.aname}</div></div>
@@ -1269,13 +1296,29 @@ function rAddAccModal(){return`
   </div>
 </div></div>`;}
 async function saveAcc(){
-  const lb=document.getElementById('na-lb').value;
+  const lb=document.getElementById('na-lb')?.value?.trim();
   if(!lb){notify('Label required','err');return;}
-  const na={id:'acc'+Date.now(),label:lb,currency:document.getElementById('na-cu').value,bank:document.getElementById('na-bk').value,aname:document.getElementById('na-an').value,anum:document.getElementById('na-nu').value,swift:document.getElementById('na-sw').value,instr:document.getElementById('na-in').value};
-  S.accounts.push(na);
+  const editId=S._editingAcc||null;
+  const na={
+    id:     editId||('acc'+Date.now()),
+    label:  lb,
+    currency: document.getElementById('na-cu')?.value||'NGN',
+    bank:   document.getElementById('na-bk')?.value||'',
+    aname:  document.getElementById('na-an')?.value||'',
+    anum:   document.getElementById('na-nu')?.value||'',
+    swift:  document.getElementById('na-sw')?.value||'',
+    instr:  document.getElementById('na-in')?.value||'',
+  };
+  if(editId){
+    const i=S.accounts.findIndex(x=>x.id===editId);
+    if(i>=0) S.accounts[i]=na; else S.accounts.push(na);
+  } else {
+    S.accounts.push(na);
+  }
+  S._editingAcc=null;
   closeModal();
   await sbUpsertAccount(na);
-  notify('Account saved ✓');
+  notify(editId?'Account updated ✓':'Account saved ✓');
 }
 
 // ── PDF generation ──
@@ -1758,7 +1801,16 @@ function nextContractId(){
 }
 
 function openNewContract(invId){
-  const inv = invId ? S.invoices.find(i=>i.id===invId) : null;
+  // Contracts must be linked to a saved invoice
+  if(!invId){
+    // Show invoice picker instead of empty contract
+    S._cf = null;
+    S.modal = 'pick_invoice_for_contract';
+    render();
+    return;
+  }
+  const inv = S.invoices.find(i=>i.id===invId);
+  if(!inv){ notify('Invoice not found','err'); return; }
   const today = new Date().toISOString().slice(0,10);
   S._cf = {
     id:          '',
@@ -1891,6 +1943,48 @@ function rContracts(){
 </div>`;
 }
 
+// ── Invoice picker (required before creating contract) ──
+function rPickInvoiceForContract(){
+  const unpaid = S.invoices.filter(inv => inv.status !== 'cancelled');
+  return `<div class="mb fade" onclick="if(event.target===this){S.modal=null;render()}">
+<div class="modal" style="max-width:560px">
+  <div class="mh">
+    <div style="font-size:15px;font-weight:700;color:var(--text)">Select Invoice</div>
+    <div class="xbtn" onclick="S.modal=null;render()">✕</div>
+  </div>
+  <div class="mbody" style="padding:0">
+    <div style="padding:14px 22px 10px;font-size:13px;color:var(--muted)">
+      Contracts are always linked to an invoice. Select the invoice this contract is for:
+    </div>
+    ${unpaid.length===0
+      ? `<div style="padding:32px;text-align:center;font-size:13px;color:var(--muted)">No invoices found. Create an invoice first.</div>`
+      : `<div style="max-height:400px;overflow-y:auto">
+        ${unpaid.map(inv=>{
+          const c2=calc(inv);
+          return `<div onclick="S.modal=null;openNewContract('${inv.id}')"
+            style="display:flex;align-items:center;justify-content:space-between;padding:13px 22px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .15s"
+            onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+            <div>
+              <div style="font-weight:600;font-size:13.5px;color:var(--text)">${esc(inv.client)}${inv.company?' · '+esc(inv.company):''}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${inv.id} · ${esc(inv.project||inv.category||'')}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;margin-left:16px">
+              <div style="font-weight:600;color:var(--text)">${fc(c2.tot,inv.currency)}</div>
+              <div style="font-size:11px;margin-top:2px">${sbadge(inv.status)}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`
+    }
+  </div>
+  <div class="mf">
+    <button onclick="S.modal=null;render()" class="btn btn-g">Cancel</button>
+    <button onclick="S.modal=null;nav('invoices')" class="btn btn-p btn-s">+ Create Invoice First</button>
+  </div>
+</div>
+</div>`;
+}
+
 // ── Contract create/edit modal ──
 function rContractModal(){
   const f = S._cf;
@@ -1957,12 +2051,14 @@ function rContractModal(){
     <div class="fg"><label class="fl">Cancellation &amp; Termination</label><textarea class="fi" rows="2" oninput="S._cf.cancellation=this.value">${esc(f.cancellation||'')}</textarea></div>
     <div class="fg"><label class="fl">Confidentiality</label><textarea class="fi" rows="2" oninput="S._cf.confidential=this.value">${esc(f.confidential||'')}</textarea></div>
 
-    <!-- Link to invoice -->
-    <div class="fg"><label class="fl">Link to Invoice (optional)</label>
-      <select class="fi" onchange="S._cf.invoice_id=this.value">
-        <option value="">— No linked invoice —</option>
-        ${invoiceOptions}
-      </select>
+    <!-- Linked invoice (read-only once set) -->
+    <div style="padding:12px 14px;background:rgba(0,212,232,.06);border:1px solid rgba(0,212,232,.15);border-radius:8px">
+      <div class="fl" style="margin-bottom:4px">Linked Invoice</div>
+      ${(()=>{const inv=S.invoices.find(i=>i.id===f.invoice_id);return inv
+        ? `<div style="font-weight:600;color:var(--cyan)">${inv.id}</div>
+           <div style="font-size:12px;color:var(--muted)">${esc(inv.client)} · ${esc(inv.project||inv.category||'')} · ${fc(calc(inv).tot,inv.currency)}</div>`
+        : `<div style="color:var(--muted);font-size:12px">No invoice linked</div>`;
+      })()}
     </div>
     <div class="fg"><label class="fl">Internal Notes</label><textarea class="fi" rows="2" oninput="S._cf.notes=this.value" placeholder="Internal notes (not shown on PDF)">${esc(f.notes||'')}</textarea></div>
   </div>
@@ -3016,6 +3112,7 @@ function render(){
   else if(S.modal==='addacc')modal=rAddAccModal();
   else if(S.modal==='addexp')modal=rAddExpModal();
   else if(S.modal==='contract')modal=rContractModal();
+  else if(S.modal==='pick_invoice_for_contract')modal=rPickInvoiceForContract();
   app.innerHTML=`
 <div class="app-root">
 <!-- Mobile top bar -->
@@ -3039,9 +3136,9 @@ function render(){
       <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h3M9 9l3-3-3-3M12 6.5H5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Sign out
     </button>
-    <div class="sb-ft" style="font-size:9px;margin-top:5px;display:flex;align-items:center;gap:5px">
-      <span style="width:6px;height:6px;border-radius:50%;background:\${db?'var(--green)':'rgba(240,236,230,.25)'};display:inline-block;flex-shrink:0"></span>
-      \${db?'Cloud sync on':'Local — connect DB'}
+    <div style="font-size:9px;margin-top:5px;display:flex;align-items:center;gap:5px;color:var(--muted)">
+      <span style="width:6px;height:6px;border-radius:50%;background:${db?'var(--green)':'rgba(240,236,230,.25)'};display:inline-block;flex-shrink:0"></span>
+      ${db?'Cloud sync on':'Local only'}
     </div></div>
 </div>
 <div class="main-wrap"><div class="main">${page}</div></div>
