@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   payments    jsonb DEFAULT '[]',
   discount    numeric DEFAULT 0,
   tax         numeric DEFAULT 0,
-  desc        text,
+  "desc"      text,          -- scope of work (matches JS property name)
   terms       text,
   created_at  timestamptz DEFAULT now()
 );
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS presets (
 
 -- ── 6. SETTINGS (key-value store for studio config) ───────────
 CREATE TABLE IF NOT EXISTS settings (
-  key         text PRIMARY KEY,
+  "key"       text PRIMARY KEY,
   value       text
 );
 
