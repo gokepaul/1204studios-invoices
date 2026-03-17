@@ -358,6 +358,7 @@ textarea.fi{resize:vertical;min-height:80px;line-height:1.6;}
 <script>
 const S={
   page:'dashboard',stab:'studio',notif:null,ntimer:null,
+  contracts:[],
   search:'',fstatus:'all',fcat:'all',fperiod:'year',
   modal:null,editing:null,viewing:null,inv_form:null,dbLoading:false,authed:false,authErr:'',reportTab:'pl',
   invoices:[],
@@ -440,6 +441,7 @@ function lsLoad(){
   try{
     const raw = localStorage.getItem(LS_KEY); if(!raw) return;
     const d = JSON.parse(raw);
+    if(d.contracts) S.contracts = d.contracts;
     if(d.invoices) S.invoices = d.invoices;
     if(d.clients)  S.clients  = d.clients;
     if(d.accounts) S.accounts = d.accounts;
@@ -455,7 +457,7 @@ async function sbUpsertInvoice(inv){
   if(!db) return lsSave();
   const row = {...inv, items:JSON.stringify(inv.items||[]), payments:JSON.stringify(inv.payments||[])};
   const {error} = await db.from('invoices').upsert(row, {onConflict:'id'});
-  if(error) console.error('sbUpsertInvoice',error);
+  if(error) 
   lsSave();
 }
 async function sbDeleteInvoice(id){
@@ -466,19 +468,19 @@ async function sbDeleteInvoice(id){
 async function sbUpsertClient(cl){
   if(!db) return lsSave();
   const {error} = await db.from('clients').upsert(cl, {onConflict:'id'});
-  if(error) console.error('sbUpsertClient',error);
+  if(error) 
   lsSave();
 }
 async function sbUpsertAccount(acc){
   if(!db) return lsSave();
   const {error} = await db.from('accounts').upsert(acc, {onConflict:'id'});
-  if(error) console.error('sbUpsertAccount',error);
+  if(error) 
   lsSave();
 }
 async function sbUpsertExpense(exp){
   if(!db) return lsSave();
   const {error}=await db.from('expenses').upsert(exp,{onConflict:'id'});
-  if(error) console.error('sbUpsertExpense',error); lsSave();
+  if(error)  lsSave();
 }
 async function sbDeleteExpense(id){
   if(!db) return lsSave();
@@ -488,7 +490,7 @@ async function sbSaveSettings(cfg){
   if(!db) return lsSave();
   const rows = Object.entries(cfg).map(([key,value])=>({key,value:JSON.stringify(value)}));
   const {error} = await db.from('settings').upsert(rows, {onConflict:'key'});
-  if(error) console.error('sbSaveSettings',error);
+  if(error) 
   lsSave();
 }
 async function sbSavePresets(presets){
@@ -497,7 +499,7 @@ async function sbSavePresets(presets){
   await db.from('presets').delete().neq('id',0);
   if(presets.length>0){
     const {error} = await db.from('presets').insert(presets.map((p,i)=>({name:p.name,price:p.price,cur:p.cur})));
-    if(error) console.error('sbSavePresets',error);
+    if(error) { /* ignore */ }
   }
   lsSave();
 }
@@ -507,7 +509,8 @@ async function loadFromSupabase(){
   if(!db){ lsLoad(); return; }
   S.dbLoading = true; render();
   try{
-    const [invRes, clRes, accRes, prRes, stRes, expRes2] = await Promise.all([
+    const [ctrRes, invRes, clRes, accRes, prRes, stRes, expRes2] = await Promise.all([
+      db.from('contracts').select('*').order('created_at',{ascending:false}),
       db.from('invoices').select('*').order('created_at',{ascending:false}),
       db.from('clients').select('*').order('created_at',{ascending:false}),
       db.from('accounts').select('*').order('created_at',{ascending:false}),
@@ -515,6 +518,7 @@ async function loadFromSupabase(){
       db.from('settings').select('*'),
       db.from('expenses').select('*').order('date',{ascending:false}),
     ]);
+    if(ctrRes.data) S.contracts = ctrRes.data;
     if(invRes.data) S.invoices = invRes.data.map(r=>({
       ...r,
       items:    typeof r.items    === 'string' ? JSON.parse(r.items||'[]')    : (r.items||[]),
@@ -531,7 +535,7 @@ async function loadFromSupabase(){
     if(expRes2&&expRes2.data) S.expenses=expRes2.data;
     lsSave(); // keep local copy in sync
   }catch(e){
-    console.error('Supabase load failed, falling back to localStorage',e);
+    /* Supabase unavailable, using localStorage */
     lsLoad();
   }
   S.dbLoading = false; render();
@@ -748,6 +752,7 @@ function rDash(){
       <td><div class="acts">
         <div class="ib" onclick="viewInv('${inv.id}')" title="View">👁</div>
         <div class="ib" onclick="dlPDF('${inv.id}')" title="PDF">⬇</div>
+          <div class="ib" onclick="openNewContract('${inv.id}')" title="New Contract" style="color:var(--cyan)">📋</div>
       </div></td>
     </tr>`;}).join('')}
     </tbody></table>
@@ -973,6 +978,7 @@ function rViewModal(){
       </select>
       <button class="btn btn-g btn-s" onclick="editInv('${inv.id}')">Edit</button>
       <button class="btn btn-p btn-s" onclick="dlPDF('${inv.id}')">⬇ PDF</button>
+      <button class="btn btn-s" style="background:rgba(0,212,232,.08);color:var(--cyan);border:1px solid rgba(0,212,232,.2)" onclick="openNewContract('${inv.id}')">📋 Contract</button>
       <div class="xbtn" onclick="closeModal()">✕</div>
     </div>
   </div>
@@ -1725,11 +1731,536 @@ async function connectSupabase(){
   }catch(e){
     db = null;
     notify('Connection failed: '+e.message,'err');
-    console.error(e);
+    
   }
 }
 
 // ── EXPENSES PAGE ──
+
+// ══════════════════════════════════════════════
+//  CONTRACTS
+// ══════════════════════════════════════════════
+
+// Supabase upsert for contracts
+async function sbUpsertContract(ct){
+  if(!db) return;
+  try{ await db.from('contracts').upsert({...ct}, {onConflict:'id'}); }catch(e){}
+}
+async function sbDeleteContract(id){
+  if(!db) return;
+  try{ await db.from('contracts').delete().eq('id',id); }catch(e){}
+}
+
+function nextContractId(){
+  const yr = new Date().getFullYear().toString().slice(2);
+  const n  = (S.contracts.length+1).toString().padStart(3,'0');
+  return `CTR-${yr}-${n}`;
+}
+
+function openNewContract(invId){
+  const inv = invId ? S.invoices.find(i=>i.id===invId) : null;
+  const today = new Date().toISOString().slice(0,10);
+  S._cf = {
+    id:          '',
+    number:      nextContractId(),
+    title:       inv ? 'Brand Contract — '+inv.project : '',
+    client:      inv ? inv.client   : '',
+    company:     inv ? inv.company  : '',
+    email:       inv ? inv.email    : '',
+    phone:       inv ? inv.phone    : '',
+    address:     inv ? (inv.address||'') : '',
+    invoice_id:  inv ? inv.id       : '',
+    start_date:  today,
+    end_date:    '',
+    value:       inv ? String(calc(inv).tot) : '',
+    currency:    inv ? inv.currency : (S.cfg.currency||'NGN'),
+    category:    inv ? inv.category : '',
+    description: inv ? (inv.desc||'') : '',
+    deliverables:'',
+    timeline:    '',
+    revisions:   '2 rounds per phase. Additional revisions billed at studio rate.',
+    payment_terms: '50% upfront before work commences. Remaining 50% before final file delivery.',
+    deposit_rule:'Work begins only after initial deposit payment is confirmed.',
+    ip_clause:   'Client owns all final deliverables upon full payment. 1204Studios retains the right to showcase completed work in its portfolio.',
+    cancellation:'The deposit is non-refundable. Work completed to date will be invoiced. Either party may terminate with 7 days written notice.',
+    liability:   '1204Studios liability is limited to the total value of this contract. We are not liable for indirect or consequential losses.',
+    confidential:'Both parties agree to keep all business information and project details confidential.',
+    comm_channel:'Primary: Email for approvals and formal decisions. Secondary: WhatsApp for quick updates.',
+    approval_process:'All deliverables must be approved in writing before the project moves to the next phase.',
+    force_majeure:'Neither party is liable for delays caused by circumstances beyond reasonable control, including internet outages, government action, or health emergencies.',
+    status:      'draft',
+    notes:       '',
+    created_at:  new Date().toISOString(),
+  };
+  S.modal = 'contract';
+  render();
+}
+
+function editContract(id){
+  const ct = S.contracts.find(c=>c.id===id);
+  if(!ct) return;
+  S._cf = {...ct};
+  S.modal = 'contract';
+  render();
+}
+
+async function saveContract(){
+  const f = S._cf;
+  if(!f.title.trim()) { notify('Contract title required','err'); return; }
+  if(!f.client.trim()){ notify('Client name required','err'); return; }
+  const isEdit = !!f.id;
+  const ct = {...f, id: f.id || ('ctr'+Date.now().toString(36))};
+  if(isEdit){ const i=S.contracts.findIndex(x=>x.id===ct.id); if(i>=0) S.contracts[i]=ct; }
+  else { S.contracts.unshift(ct); }
+  lsSave();
+  S.modal = null;
+  await sbUpsertContract(ct);
+  notify(isEdit ? 'Contract updated ✓' : 'Contract created ✓');
+  render();
+}
+
+async function deleteContract(id){
+  if(!confirm('Delete this contract? This cannot be undone.')) return;
+  S.contracts = S.contracts.filter(c=>c.id!==id);
+  S.modal = null;
+  lsSave();
+  await sbDeleteContract(id);
+  notify('Contract deleted');
+  render();
+}
+
+const CT_STATUS_COLOR = {draft:'var(--muted)',sent:'var(--cyan)',signed:'var(--green)',cancelled:'var(--red)'};
+const CT_STATUS_LABEL = {draft:'Draft',sent:'Sent',signed:'Signed',cancelled:'Cancelled'};
+
+function ctbadge(s){
+  const col = CT_STATUS_COLOR[s]||'var(--muted)';
+  return `<span class="tag" style="color:${col};border-color:${col}30;background:${col}10">${CT_STATUS_LABEL[s]||s}</span>`;
+}
+
+// ── Contracts list page ──
+function rContracts(){
+  let f = S.contracts;
+  if(S.search) f = f.filter(c=>
+    c.number.toLowerCase().includes(S.search.toLowerCase()) ||
+    c.client.toLowerCase().includes(S.search.toLowerCase()) ||
+    c.title.toLowerCase().includes(S.search.toLowerCase())
+  );
+  return `
+<div class="ph fade">
+  <div><div class="pt">Contracts</div><div class="ps">${S.contracts.length} total · ${f.length} shown</div></div>
+  <button class="btn btn-p" onclick="openNewContract()">+ New Contract</button>
+</div>
+<div class="pb fade">
+  <div class="filters">
+    <div class="sw"><span class="si">🔍</span><input placeholder="Search by client, contract #…" value="${esc(S.search)}" oninput="clearTimeout(S._st);S._st=setTimeout(()=>{S.search=this.value;render();},180)"/></div>
+  </div>
+  <div class="card">
+    ${f.length===0 ? `<div style="text-align:center;padding:52px 20px">
+  <div style="font-size:32px;margin-bottom:10px">📋</div>
+  <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">${S.contracts.length===0?'No contracts yet':'No results'}</div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:18px">${S.contracts.length===0?'Create your first contract or generate one from an invoice':'Try adjusting your search'}</div>
+  ${S.contracts.length===0?'<button class="btn btn-p btn-s" onclick="openNewContract()">+ Create Contract</button>':''}
+</div>` : `
+    <table class="tbl"><thead><tr>
+      <th>Contract #</th><th>Client</th><th>Title</th><th>Value</th><th>Start</th><th>Status</th><th>Linked Invoice</th><th></th>
+    </tr></thead><tbody>
+    ${f.map(ct=>{
+      const inv = ct.invoice_id ? S.invoices.find(i=>i.id===ct.invoice_id) : null;
+      const sym = SYM[ct.currency]||ct.currency;
+      const val = ct.value ? sym+Number(ct.value).toLocaleString('en-NG',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—';
+      return `<tr>
+        <td class="mono s">${esc(ct.number)}</td>
+        <td><div style="font-weight:600;color:var(--text)">${esc(ct.client)}</div><div style="font-size:11.5px;color:var(--muted)">${esc(ct.company||'')}</div></td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ct.title)}</td>
+        <td class="s">${val}</td>
+        <td style="color:var(--dim);font-size:13px">${ct.start_date ? fd(ct.start_date) : '—'}</td>
+        <td>${ctbadge(ct.status)}</td>
+        <td>${inv ? `<span class="mono" style="font-size:11.5px;color:var(--cyan);cursor:pointer" onclick="viewInv('${inv.id}')">${inv.id}</span>` : '<span style="color:var(--muted);font-size:12px">—</span>'}</td>
+        <td><div class="acts">
+          <div class="ib" onclick="dlContractPDF('${ct.id}')" title="Download PDF">⬇</div>
+          <div class="ib" onclick="editContract('${ct.id}')" title="Edit">✏️</div>
+          <select class="fs" style="font-size:11px;padding:4px 7px" onchange="(async()=>{const ct=S.contracts.find(x=>x.id==='${ct.id}');if(ct){ct.status=this.value;lsSave();await sbUpsertContract(ct);notify('Status updated ✓');render();}})()">
+            ${['draft','sent','signed','cancelled'].map(s=>`<option value="${s}" ${ct.status===s?'selected':''}>${CT_STATUS_LABEL[s]}</option>`).join('')}
+          </select>
+          <div class="ib" onclick="deleteContract('${ct.id}')" title="Delete" style="color:var(--red)">✕</div>
+        </div></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`}
+  </div>
+</div>`;
+}
+
+// ── Contract create/edit modal ──
+function rContractModal(){
+  const f = S._cf;
+  if(!f) return '';
+  const isEdit = !!f.id;
+  const invoiceOptions = S.invoices.map(inv=>`<option value="${inv.id}" ${f.invoice_id===inv.id?'selected':''}>${inv.id} — ${esc(inv.client)} (${esc(inv.project||'')})</option>`).join('');
+  return `<div class="mb fade" onclick="if(event.target===this){S.modal=null;render()}">
+<div class="modal" style="max-width:680px;max-height:90vh">
+  <div class="mh">
+    <div style="font-size:15px;font-weight:700;color:var(--text)">${isEdit?'Edit Contract':'New Contract'}</div>
+    <div class="xbtn" onclick="S.modal=null;render()">✕</div>
+  </div>
+  <div class="mbody" style="display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:calc(90vh - 120px)">
+
+    <!-- Core info -->
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Contract #</label><input class="fi" value="${esc(f.number)}" oninput="S._cf.number=this.value"/></div>
+      <div class="fg"><label class="fl">Status</label>
+        <select class="fi" onchange="S._cf.status=this.value">
+          ${['draft','sent','signed','cancelled'].map(s=>`<option value="${s}" ${f.status===s?'selected':''}>${CT_STATUS_LABEL[s]}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Contract Title</label><input class="fi" value="${esc(f.title)}" oninput="S._cf.title=this.value" placeholder="e.g. Brand Identity Contract — Glorious Light Academy"/></div>
+
+    <!-- Client info -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:-6px">Client Details</div>
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Contact Name</label><input class="fi" value="${esc(f.client)}" oninput="S._cf.client=this.value" placeholder="Full name"/></div>
+      <div class="fg"><label class="fl">Company</label><input class="fi" value="${esc(f.company||'')}" oninput="S._cf.company=this.value" placeholder="Company Ltd"/></div>
+    </div>
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Email</label><input class="fi" type="email" value="${esc(f.email||'')}" oninput="S._cf.email=this.value"/></div>
+      <div class="fg"><label class="fl">Phone</label><input class="fi" value="${esc(f.phone||'')}" oninput="S._cf.phone=this.value"/></div>
+    </div>
+    <div class="fg"><label class="fl">Address</label><input class="fi" value="${esc(f.address||'')}" oninput="S._cf.address=this.value" placeholder="Client address"/></div>
+
+    <!-- Project details -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:-6px">Project Details</div>
+    <div class="fg"><label class="fl">Description / Scope Summary</label><textarea class="fi" rows="2" oninput="S._cf.description=this.value" placeholder="Brief overview of the engagement">${esc(f.description||'')}</textarea></div>
+    <div class="fg"><label class="fl">Deliverables</label><textarea class="fi" rows="3" oninput="S._cf.deliverables=this.value" placeholder="List each deliverable on a new line:\n• Logo (Primary + Variations)\n• Brand Guidelines PDF\n• Social Media Templates">${esc(f.deliverables||'')}</textarea></div>
+    <div class="fg"><label class="fl">Timeline</label><textarea class="fi" rows="2" oninput="S._cf.timeline=this.value" placeholder="Week 1–2: Discovery · Week 3–4: Design · Week 5: Refinement · Week 6: Delivery">${esc(f.timeline||'')}</textarea></div>
+
+    <!-- Financials -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:-6px">Financials</div>
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Contract Value</label><input class="fi" type="number" value="${f.value||''}" oninput="S._cf.value=this.value" placeholder="0"/></div>
+      <div class="fg"><label class="fl">Currency</label>
+        <select class="fi" onchange="S._cf.currency=this.value">
+          ${['NGN','USD','GBP','EUR'].map(cur=>`<option value="${cur}" ${f.currency===cur?'selected':''}>${cur}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="fr c2">
+      <div class="fg"><label class="fl">Start Date</label><input class="fi" type="date" value="${f.start_date||''}" oninput="S._cf.start_date=this.value"/></div>
+      <div class="fg"><label class="fl">End Date</label><input class="fi" type="date" value="${f.end_date||''}" oninput="S._cf.end_date=this.value"/></div>
+    </div>
+
+    <!-- Terms (editable) -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:-6px">Terms &amp; Clauses</div>
+    <div class="fg"><label class="fl">Revision Policy</label><textarea class="fi" rows="2" oninput="S._cf.revisions=this.value">${esc(f.revisions||'')}</textarea></div>
+    <div class="fg"><label class="fl">Payment Terms</label><textarea class="fi" rows="2" oninput="S._cf.payment_terms=this.value">${esc(f.payment_terms||'')}</textarea></div>
+    <div class="fg"><label class="fl">IP &amp; Ownership</label><textarea class="fi" rows="2" oninput="S._cf.ip_clause=this.value">${esc(f.ip_clause||'')}</textarea></div>
+    <div class="fg"><label class="fl">Cancellation &amp; Termination</label><textarea class="fi" rows="2" oninput="S._cf.cancellation=this.value">${esc(f.cancellation||'')}</textarea></div>
+    <div class="fg"><label class="fl">Confidentiality</label><textarea class="fi" rows="2" oninput="S._cf.confidential=this.value">${esc(f.confidential||'')}</textarea></div>
+
+    <!-- Link to invoice -->
+    <div class="fg"><label class="fl">Link to Invoice (optional)</label>
+      <select class="fi" onchange="S._cf.invoice_id=this.value">
+        <option value="">— No linked invoice —</option>
+        ${invoiceOptions}
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Internal Notes</label><textarea class="fi" rows="2" oninput="S._cf.notes=this.value" placeholder="Internal notes (not shown on PDF)">${esc(f.notes||'')}</textarea></div>
+  </div>
+  <div class="mf">
+    <button onclick="S.modal=null;render()" class="btn btn-g">Cancel</button>
+    ${isEdit?`<button onclick="deleteContract('${f.id}')" class="btn btn-d btn-s" style="margin-right:auto">Delete</button>`:''}
+    <button onclick="dlContractPDF(null,true)" class="btn btn-g btn-s">Preview PDF</button>
+    <button onclick="saveContract()" class="btn btn-p">${isEdit?'Save Changes':'Create Contract'}</button>
+  </div>
+</div>
+</div>`;
+}
+
+// ── Contract PDF (same format as invoice) ──
+function dlContractPDF(id, preview){
+  const ct = preview ? S._cf : S.contracts.find(c=>c.id===id);
+  if(!ct){ notify('Contract not found','err'); return; }
+  const st  = S.cfg;
+  const sym = SYM[ct.currency]||ct.currency;
+  const fm  = n => sym + Number(n).toLocaleString('en-NG',{minimumFractionDigits:0,maximumFractionDigits:0});
+  const fd2 = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}) : '—';
+
+  // Re-use the same watermark data URI from dlPDF
+  // Extract it from the existing function
+  const WM_MATCH = document.getElementById('app').innerHTML; // not available in gen context
+  // Use the same WM constant used in dlPDF — access it directly
+  const WM = dlPDF._wm || (() => {
+    // Extract from page source — find between const WM=' and ';
+    const src = document.currentScript?.ownerDocument?.documentElement?.innerHTML || '';
+    const m = src.match(/const WM='([^']+)'/);
+    return m ? m[1] : '';
+  })();
+
+  // Get WM from a pre-extracted reference we'll set below
+  // Extract watermark from dlPDF function source (same WM used for invoices)
+  const _src = dlPDF.toString();
+  const _wm_match = _src.match(/const WM='([^']+)'/);
+  const wmBase64 = _wm_match ? _wm_match[1] : '';
+
+  // Linked invoice details
+  const inv = ct.invoice_id ? S.invoices.find(i=>i.id===ct.invoice_id) : null;
+
+  // Logo black (for PDF)
+  const LOGO_BLACK = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUzMSIgaGVpZ2h0PSI0MDEiIHZpZXdCb3g9IjAgMCAxNTMxIDQwMSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTAgMC40NzI2NTZINzMuMjEzOEMxMDEuMjk0IDAuNDcyNjU2IDEyNC4wNTcgMjMuMjM1OCAxMjQuMDU3IDUxLjMxNTZWMzQ5LjI1NUMxMjQuMDU3IDM3Ny4zMzUgMTAxLjI5NCA0MDAuMDk4IDczLjIxMzggNDAwLjA5OEg1MC44NDNDMjIuNzYzMiA0MDAuMDk4IDAgMzc3LjMzNSAwIDM0OS4yNTVWMC40NzI2NTZaIiBmaWxsPSIjMDA5NUZGIi8+CjxwYXRoIGQ9Ik03NDYuMjk3IDEyLjU5MjNDNzUzLjkyNSA0LjgzOTA0IDc2NC4zNDYgMC40NzI2NTYgNzc1LjIyMiAwLjQ3MjY1NkM3ODkuMDU2IDAuNDcyNjU2IDgwMC4yNyAxMS42ODcgODAwLjI3IDI1LjUyMDZWNDAwLjA5OEg1MDIuNDA1QzQ1MS4zNiA0MDAuMDk4IDQyNS41ODMgMzM4LjU3NiA0NjEuMzgyIDMwMi4xODhMNzQ2LjI5NyAxMi41OTIzWiIgZmlsbD0iIzFBMUExQSIvPgo8cGF0aCBkPSJNMjIxLjU4OSAwLjQ4MDQ2OUMzMjcuNzc4IDAuNDgwNDg3IDQxMy44NjEgODkuOTM5NiA0MTMuODYxIDIwMC4yOTNDNDEzLjg2MSAyMzUuMzU2IDQwNS4xNjcgMjY4LjMwOSAzODkuOTAyIDI5Ni45NTRDNDA0LjI4NyAzMDUuOTM0IDQxMy44NiAzMjEuOTAzIDQxMy44NiAzNDAuMTFWMzQ5LjI2M0M0MTMuODYgMzc3LjM0MiAzOTEuMDk2IDQwMC4xMDUgMzYzLjAxNyA0MDAuMTA1SDIyOS44MDlWMzk5LjkyNUMyMjcuMDgzIDQwMC4wNDQgMjI0LjM0MyA0MDAuMTA1IDIyMS41ODkgNDAwLjEwNUgxNTQuNTYyVjM4NC44NTRDMTU0LjU2MiAzMzguMjQxIDE5NC43NjMgMzA1LjExNSAyMzYuOTA0IDI4NS4xOTRDMjY3LjE5NyAyNzAuODc1IDI4OC42MTUgMjQ0LjczOCAyODguNjE1IDE5OS43ODVDMjg4LjYxNSAxNDQuMTg3IDI0NS4yNDUgOTkuMTE2MyAxOTEuNzQ1IDk5LjExNjJDMTcyLjkyMiA5OS4xMTYyIDE1NC41NjIgODEuMDQzOSAxNTQuNTYyIDYyLjIyMDdWMjQuOTc3NUMxNTQuNTYzIDExLjQ0ODQgMTY1LjExNiAwLjQ4MDY3NCAxNzguMTM1IDAuNDgwNDY5SDIyMS41ODlaIiBmaWxsPSIjRUQwMDhFIi8+CjxwYXRoIGQ9Ik00MzQuODA1IDEyMy4yOTRDNDA2Ljk1MyA5NS40NDE3IDQwNi45NTMgNTAuMjg0OSA0MzQuODA1IDIyLjQzMzFWMjIuNDMzMUM0NjIuNjU3IC01LjQxODc5IDUwNy44MTQgLTUuNDE4OCA1MzUuNjY2IDIyLjQzM0w1NjYuMTcgNTIuOTM3MUM1OTQuMDIyIDgwLjc4OSA1OTQuMDIyIDEyNS45NDYgNTY2LjE3IDE1My43OThWMTUzLjc5OEM1MzguMzE4IDE4MS42NDkgNDkzLjE2MSAxODEuNjQ5IDQ2NS4zMDkgMTUzLjc5OEw0MzQuODA1IDEyMy4yOTRaIiBmaWxsPSIjRkVDNzIwIi8+';
+
+  const delivRows = (ct.deliverables||'').split('\n').filter(Boolean);
+  const tlRows    = (ct.timeline||'').split('·').map(s=>s.trim()).filter(Boolean);
+
+  const accentColor = st.color || '#ff2d78';
+
+  notify('Opening print dialog…');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>${ct.number} — 1204Studios</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,'SF Pro Text',BlinkMacSystemFont,'Helvetica Neue',sans-serif;font-size:12.5px;color:#111;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  @page{size:A4 portrait;margin:0;}
+  @media print{html,body{width:210mm;height:297mm;}.page{page-break-after:always;page-break-inside:avoid;}.page:last-child{page-break-after:auto;}.no-print{display:none!important;}}
+  .page{width:210mm;min-height:297mm;position:relative;overflow:hidden;background:#fff;display:flex;flex-direction:column;}
+  .wm{position:absolute;inset:0;z-index:0;pointer-events:none;width:100%;height:100%;overflow:hidden;}
+  .wm img{width:100%;height:100%;object-fit:cover;object-position:center;opacity:${st.wmOpacity||0.08};display:block;}
+  .content{position:relative;z-index:1;padding:36px 44px;flex:1;display:flex;flex-direction:column;}
+  .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;}
+  .logo-img{height:28px;width:auto;display:block;}
+  .studio-info{text-align:right;font-size:11px;color:#555;line-height:1.7;}
+  .doc-title{font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,sans-serif;font-weight:700;font-size:36px;letter-spacing:-.02em;color:${accentColor};margin-bottom:4px;}
+  .doc-num{font-family:'DM Mono','Courier New',monospace;font-size:12px;color:#999;margin-bottom:26px;}
+  .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:24px;}
+  .lbl{font-size:9.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:4px;}
+  .val{font-size:13.5px;font-weight:600;color:#111;line-height:1.4;}
+  .sub{font-size:12px;color:#444;line-height:1.55;}
+  .section{margin-bottom:20px;}
+  .section-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${accentColor};border-bottom:1.5px solid ${accentColor}22;padding-bottom:5px;margin-bottom:10px;}
+  .clause{margin-bottom:14px;}
+  .clause .lbl{margin-bottom:3px;}
+  .clause-text{font-size:12px;color:#333;line-height:1.75;}
+  .highlight-box{background:#f7f7f7;border-left:3px solid ${accentColor};border-radius:0 4px 4px 0;padding:11px 14px;margin-bottom:12px;}
+  .highlight-box .lbl{margin-bottom:3px;}
+  .highlight-text{font-size:12px;color:#222;font-weight:600;line-height:1.6;}
+  .deliv-list{padding-left:0;list-style:none;}
+  .deliv-list li{font-size:12px;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start;gap:8px;line-height:1.5;}
+  .deliv-list li:last-child{border-bottom:none;}
+  .deliv-list li::before{content:'✓';color:${accentColor};font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;}
+  .tl-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+  .tl-item{background:#f7f7f7;border:1px solid #e8e8e8;border-radius:4px;padding:5px 10px;font-size:11.5px;color:#333;}
+  .value-bar{background:#f7f7f7;border-radius:4px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+  .value-label{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;}
+  .value-amount{font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,sans-serif;font-size:24px;font-weight:700;color:#111;letter-spacing:-.02em;}
+  .inv-ref{display:inline-block;background:${accentColor}15;border:1px solid ${accentColor}30;border-radius:4px;padding:3px 10px;font-family:'DM Mono','Courier New',monospace;font-size:11px;color:${accentColor};margin-top:4px;}
+  .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px;}
+  .sig-block{border-top:1.5px solid #333;padding-top:8px;}
+  .sig-lbl{font-size:11px;color:#666;margin-bottom:3px;}
+  .sig-name{font-size:11px;color:#888;}
+  .sig-date{font-size:10px;color:#bbb;margin-top:12px;}
+  .footer{margin-top:auto;padding-top:16px;border-top:1px solid #eee;font-size:9.5px;color:#bbb;text-align:center;line-height:1.7;}
+  .agree-line{font-size:11px;color:#555;font-style:italic;text-align:center;margin-bottom:24px;padding:10px 16px;background:#f7f7f7;border-radius:4px;}
+  .page2-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:12px;border-bottom:1px solid #eee;}
+</style>
+</head>
+<body>
+
+<!-- ══ PAGE 1: CONTRACT COVER ══ -->
+<div class="page">
+  <div class="wm"><img src="${wmBase64}" alt=""/></div>
+  <div class="content">
+
+    <div class="hd">
+      <div>
+        <img src="${LOGO_BLACK}" alt="1204Studios" class="logo-img"/>
+        <div style="font-size:9.5px;color:#999;margin-top:3px">${st.tag||''}</div>
+      </div>
+      <div class="studio-info">
+        ${st.rc?`<div style="font-size:9px;color:#bbb">${st.rc}</div>`:''}
+        <div>${st.addr||''}</div>
+        <div>${st.email||''}</div>
+        <div>${st.phone||''}</div>
+        <div>${st.web||''}</div>
+      </div>
+    </div>
+
+    <div class="doc-title">CONTRACT</div>
+    <div class="doc-num">${ct.number}${ct.category?' · '+ct.category:''}</div>
+
+    <!-- Parties -->
+    <div class="meta-grid">
+      <div>
+        <div class="lbl">Client</div>
+        <div class="val">${ct.client}</div>
+        ${ct.company?`<div class="sub">${ct.company}</div>`:''}
+        ${ct.email?`<div class="sub">${ct.email}</div>`:''}
+        ${ct.phone?`<div class="sub">${ct.phone}</div>`:''}
+        ${ct.address?`<div class="sub" style="margin-top:3px">${ct.address}</div>`:''}
+      </div>
+      <div>
+        <div style="margin-bottom:14px">
+          <div class="lbl">Service Provider</div>
+          <div class="val">${st.name||'1204Studios'}</div>
+          <div class="sub">${st.addr||''}</div>
+        </div>
+        <div style="margin-bottom:14px">
+          <div class="lbl">Contract Date</div>
+          <div class="val">${fd2(ct.start_date)}</div>
+        </div>
+        ${ct.end_date?`<div><div class="lbl">Completion Date</div><div class="val">${fd2(ct.end_date)}</div></div>`:''}
+      </div>
+    </div>
+
+    <!-- Project summary -->
+    <div class="section">
+      <div class="section-title">Project Overview</div>
+      <div style="font-size:13px;font-weight:600;color:#111;margin-bottom:6px">${ct.title}</div>
+      ${ct.description?`<div class="sub" style="line-height:1.75">${ct.description}</div>`:''}
+    </div>
+
+    <!-- Contract value -->
+    ${ct.value?`<div class="value-bar">
+      <div class="value-label">Total Contract Value</div>
+      <div>
+        <div class="value-amount">${fm(ct.value)}</div>
+        ${inv?`<div class="inv-ref">Invoice ${inv.id}</div>`:''}
+      </div>
+    </div>`:''}
+
+    <!-- Deliverables -->
+    ${delivRows.length?`<div class="section">
+      <div class="section-title">Scope of Work &amp; Deliverables</div>
+      <ul class="deliv-list">${delivRows.map(d=>`<li>${d.replace(/^[•\-\*]\s*/,'')}</li>`).join('')}</ul>
+    </div>`:''}
+
+    <!-- Timeline -->
+    ${tlRows.length?`<div class="section">
+      <div class="section-title">Timeline</div>
+      <div class="tl-list">${tlRows.map(t=>`<div class="tl-item">${t}</div>`).join('')}</div>
+      <div style="font-size:11px;color:#888;margin-top:8px;font-style:italic">Timelines are subject to client feedback within 2–3 working days.</div>
+    </div>`:''}
+
+    <!-- Agree line -->
+    <div class="agree-line" style="margin-top:auto">
+      "By proceeding with payment, the client agrees to the terms outlined in this contract."
+    </div>
+
+    <div class="footer">${(st.footer||'').replace(/\n/g,' · ')}</div>
+  </div>
+</div>
+
+<!-- ══ PAGE 2: TERMS & SIGNATURES ══ -->
+<div class="page">
+  <div class="wm"><img src="${wmBase64}" alt=""/></div>
+  <div class="content">
+
+    <div class="page2-hd">
+      <div>
+        <img src="${LOGO_BLACK}" alt="1204Studios" class="logo-img"/>
+        <div style="font-size:9.5px;color:#999;margin-top:2px">${st.tag||''}</div>
+      </div>
+      <div style="font-family:'DM Mono','Courier New',monospace;font-size:10px;color:#bbb">${ct.number}</div>
+    </div>
+
+    <div class="section-title" style="font-size:12px;margin-bottom:18px">Terms &amp; Conditions</div>
+
+    <div class="clause">
+      <div class="lbl">1. Revision Policy</div>
+      <div class="clause-text">${ct.revisions||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">2. Payment Terms</div>
+      <div class="clause-text">${ct.payment_terms||''}</div>
+    </div>
+    <div class="highlight-box">
+      <div class="lbl">Work Commencement</div>
+      <div class="highlight-text">${ct.deposit_rule||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">3. Intellectual Property &amp; Ownership</div>
+      <div class="clause-text">${ct.ip_clause||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">4. Cancellation &amp; Termination</div>
+      <div class="clause-text">${ct.cancellation||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">5. Liability Limitation</div>
+      <div class="clause-text">${ct.liability||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">6. Confidentiality</div>
+      <div class="clause-text">${ct.confidential||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">7. Communication Channel</div>
+      <div class="clause-text">${ct.comm_channel||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">8. Approval Process</div>
+      <div class="clause-text">${ct.approval_process||''}</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">9. Final Delivery Condition</div>
+      <div class="clause-text">No final files will be released until full payment is completed.</div>
+    </div>
+    <div class="clause">
+      <div class="lbl">10. Force Majeure</div>
+      <div class="clause-text">${ct.force_majeure||''}</div>
+    </div>
+
+    <!-- Signatures -->
+    <div class="sig-grid" style="margin-top:auto">
+      <div>
+        <div class="sig-block">
+          <div class="sig-lbl">Authorised — 1204Studios</div>
+          <div class="sig-name">${st.name||'1204Studios'}</div>
+          <div class="sig-date">Signature: ________________________</div>
+          <div class="sig-date">Date: ___________________________</div>
+        </div>
+      </div>
+      <div>
+        <div class="sig-block">
+          <div class="sig-lbl">Client Signature &amp; Acceptance</div>
+          <div class="sig-name">${ct.client}${ct.company?' · '+ct.company:''}</div>
+          <div class="sig-date">Signature: ________________________</div>
+          <div class="sig-date">Date: ___________________________</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer" style="margin-top:20px">${(st.footer||'').replace(/\n/g,' · ')}</div>
+  </div>
+</div>
+
+</body>
+</html>`;
+
+  // Write to iframe and print
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const frameId = 'pdf-print-frame';
+  let frame = document.getElementById(frameId);
+  if(frame) frame.remove();
+  frame = document.createElement('iframe');
+  frame.id = frameId;
+  frame.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;opacity:0;border:none;';
+  document.body.appendChild(frame);
+  frame.onload = function(){
+    setTimeout(()=>{
+      try{ frame.contentWindow.focus(); frame.contentWindow.print(); }
+      catch(e){ window.print(); }
+      setTimeout(()=>{ URL.revokeObjectURL(url); }, 60000);
+    }, 900);
+  };
+  frame.src = url;
+  notify('Print dialog opening — choose "Save as PDF"');
+}
+
 function rExpenses(){
   let exps=S.expenses;
   if(S.search) exps=exps.filter(e=>e.description.toLowerCase().includes(S.search.toLowerCase())||e.supplier.toLowerCase().includes(S.search.toLowerCase()));
@@ -2458,6 +2989,7 @@ function render(){
     {id:'clients',label:'Clients',icon:`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.5" r="2.8" stroke="currentColor" stroke-width="1.4"/><path d="M2 13.5c0-2.485 2.686-4.5 6-4.5s6 2.015 6 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`},
     {id:'accounts',label:'Accounts',icon:`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M1 7h14" stroke="currentColor" stroke-width="1.3"/><rect x="3" y="9.5" width="3" height="1.5" rx=".5" fill="currentColor"/></svg>`},
     {id:'expenses',label:'Expenses',icon:`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12v2H2zM2 7h8v1.5H2zM2 10.5h6V12H2z" fill="currentColor" opacity=".7"/><circle cx="12" cy="11" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M12 9.5v1.2l.8.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`},
+    {id:'contracts',label:'Contracts',icon:`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 4h6M5 6.5h6M5 9h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M8.5 11.5l1.5 1.5 2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`},
     {id:'reports',label:'Reports',icon:`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13V9l3-3 3 3 4-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 4h2v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`},
     {id:'settings',label:'Settings',icon:`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.3M8 13.2v1.3M1.5 8h1.3M13.2 8h1.3M3.4 3.4l.92.92M11.68 11.68l.92.92M12.6 3.4l-.92.92M4.32 11.68l-.92.92" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`},
   ];
@@ -2473,6 +3005,7 @@ function render(){
   else if(S.page==='clients')page=rClients();
   else if(S.page==='accounts')page=rAccounts();
   else if(S.page==='expenses')page=rExpenses();
+  else if(S.page==='contracts')page=rContracts();
   else if(S.page==='reports')page=rReports();
   else if(S.page==='settings')page=rSettings();
   let modal='';
@@ -2482,6 +3015,7 @@ function render(){
   else if(S.modal==='addclient')modal=rAddClientModal();
   else if(S.modal==='addacc')modal=rAddAccModal();
   else if(S.modal==='addexp')modal=rAddExpModal();
+  else if(S.modal==='contract')modal=rContractModal();
   app.innerHTML=`
 <div class="app-root">
 <!-- Mobile top bar -->
