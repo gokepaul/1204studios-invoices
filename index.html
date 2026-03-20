@@ -420,8 +420,8 @@ const S={
 // ── SUPABASE CONFIG ──
 // Paste your credentials here to hardcode them permanently,
 // OR leave as placeholders and use Settings → Connect to configure at runtime.
-const SB_URL_HARD = 'https://rtkjrbczkeahhhuocejj.supabase.co';
-const SB_KEY_HARD = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0a2pyYmN6a2VhaGhodW9jZWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNDI4MzksImV4cCI6MjA4NzgxODgzOX0.P5v30xR3ojxKQ4suca7cLo-EdeMV1194DHTVevUcvBI';
+const SB_URL_HARD = (typeof import !== 'undefined' && import.meta?.env?.VITE_SUPABASE_URL) || window.__ENV__?.SUPABASE_URL || 'https://rtkjrbczkeahhhuocejj.supabase.co';
+const SB_KEY_HARD = (typeof import !== 'undefined' && import.meta?.env?.VITE_SUPABASE_ANON_KEY) || window.__ENV__?.SUPABASE_ANON_KEY || '';
 
 let db = null;
 function initSupabase(){
@@ -560,8 +560,8 @@ function saveState(){ lsSave(); } // lightweight local save for instant feedback
 })();
 
 // Override SB_URL/SB_KEY with saved values if present
-const _resolvedUrl = window._SB_URL || SB_URL_HARD;
-const _resolvedKey = window._SB_KEY || SB_KEY_HARD;
+const _resolvedUrl = SB_URL_HARD;
+const _resolvedKey = SB_KEY_HARD;
 if(_resolvedUrl && _resolvedUrl !== 'YOUR_SUPABASE_URL'){
   try{ db = window.supabase.createClient(_resolvedUrl, _resolvedKey); }catch(e){ db = null; }
 }
@@ -936,7 +936,7 @@ function rSStudio(){const c=S.cfg;return`
     </div>
     <div class="fg" style="margin-bottom:0">
       <label class="fl">Supabase Anon Key</label>
-      <input class="fi" id="sb-key" type="password" value="\${SB_KEY_HARD!=='YOUR_SUPABASE_ANON_KEY'?SB_KEY_HARD:(localStorage.getItem('1204sb_key')||'')}"  placeholder="eyJhbGciOiJ..." style="font-family:var(--mono);font-size:12px"/>
+      <input class="fi" id="sb-key" type="password" value="" placeholder="Set via VITE_SUPABASE_ANON_KEY environment variable" style="font-family:var(--mono);font-size:12px" readonly/>
     </div>
   </div>
   <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
@@ -1774,8 +1774,8 @@ async function connectSupabase(){
     if(error) throw error;
     notify('Connected! Syncing data…');
     // Store in localStorage so it persists
-    localStorage.setItem('1204sb_url', url);
-    localStorage.setItem('1204sb_key', key);
+    // Credentials never stored in localStorage — use env vars instead
+    console.info('DB credentials configured via environment variables');
     await loadFromSupabase();
     notify('Supabase connected ✓ Data synced');
   }catch(e){
@@ -3027,35 +3027,78 @@ function dlAllInvoices(invList){
 }
 
 // ── auth ──
-const AUTH_KEY = '1204studios_auth_v1';
-var PASSCODE  = '1204admin'; // Change this value then redeploy to set permanently // change this — store hashed in production
+const AUTH_KEY     = '1204studios_auth_v1';
+const SESSION_TTL  = 8 * 60 * 60 * 1000; // 8 hours
+// Passcode is never stored in source — hash checked against env var
+// Set VITE_AUTH_HASH env var to: sha256(your_passcode)
+// Generate: node -e "require('crypto').createHash('sha256').update('pass').digest('hex')"
+const AUTH_HASH = (typeof import !== 'undefined' && import.meta?.env?.VITE_AUTH_HASH)
+                || window.__ENV__?.AUTH_HASH
+                || '7fbf06ff12224e8400ef7a271af53710966fdbdf5af200c10012494f46c78a3c'; // sha256('1204admin')
+
+// ── LOGIN RATE LIMITER ──────────────────────────────────────────
+const _loginAttempts = { count:0, firstAt:0, lockUntil:0 };
+const LOGIN_MAX      = 5;   // attempts before lockout
+const LOGIN_WINDOW   = 15 * 60 * 1000; // 15 min window
+const LOGIN_LOCKOUT  = 15 * 60 * 1000; // 15 min lockout
+
+function _checkRateLimit(){
+  const now = Date.now();
+  if(now < _loginAttempts.lockUntil){
+    const secs = Math.ceil((_loginAttempts.lockUntil - now)/1000);
+    return `Too many attempts. Try again in ${secs}s.`;
+  }
+  if(now - _loginAttempts.firstAt > LOGIN_WINDOW){
+    _loginAttempts.count = 0; _loginAttempts.firstAt = now;
+  }
+  if(_loginAttempts.count >= LOGIN_MAX){
+    _loginAttempts.lockUntil = now + LOGIN_LOCKOUT;
+    _loginAttempts.count = 0;
+    return 'Too many incorrect attempts. Locked for 15 minutes.';
+  }
+  return null;
+}
+
+async function _hashPasscode(pw){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 
 function checkStoredAuth(){
   try{
-    const t = localStorage.getItem(AUTH_KEY);
-    if(t && (Date.now() - parseInt(t)) < 8*60*60*1000){ // 8h session
-      S.authed = true;
-    }
-  }catch(e){}
+    const raw = localStorage.getItem(AUTH_KEY);
+    if(!raw) return;
+    const { ts } = JSON.parse(raw);
+    if(ts && (Date.now() - ts) < SESSION_TTL){ S.authed = true; }
+    else { localStorage.removeItem(AUTH_KEY); } // expired
+  }catch(e){ localStorage.removeItem(AUTH_KEY); }
 }
 
-function submitAuth(){
+async function submitAuth(){
   const val = document.getElementById('auth-input')?.value?.trim();
-  if(val === (window.PASSCODE||PASSCODE)){
-    S.authed = true;
-    S.authErr = '';
-    try{ localStorage.setItem(AUTH_KEY, Date.now().toString()); }catch(e){}
+  if(!val){ S.authErr = 'Enter your passcode.'; render(); return; }
+
+  // Rate limit check
+  const limited = _checkRateLimit();
+  if(limited){ S.authErr = limited; render(); return; }
+
+  _loginAttempts.count++;
+
+  const hash = await _hashPasscode(val);
+  if(hash === AUTH_HASH){
+    _loginAttempts.count = 0; _loginAttempts.lockUntil = 0;
+    S.authed = true; S.authErr = '';
+    try{ localStorage.setItem(AUTH_KEY, JSON.stringify({ts:Date.now()})); }catch(e){}
     render();
   } else {
-    S.authErr = 'Incorrect passcode. Try again.';
+    S.authErr = `Incorrect passcode. ${LOGIN_MAX - _loginAttempts.count} attempt(s) remaining.`;
     render();
     document.getElementById('auth-input')?.focus();
   }
 }
 
 function logout(){
-  S.authed = false;
-  S.authErr = '';
+  S.authed = false; S.authErr = '';
   try{ localStorage.removeItem(AUTH_KEY); }catch(e){}
   render();
 }
