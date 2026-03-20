@@ -4,8 +4,9 @@ import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate 
 /* ═══════════════════════════════════════════════════════════════
    SUPABASE
 ═══════════════════════════════════════════════════════════════ */
-const SB_URL = "https://rtkjrbczkeahhhuocejj.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0a2pyYmN6a2VhaGhodW9jZWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNDI4MzksImV4cCI6MjA4NzgxODgzOX0.P5v30xR3ojxKQ4suca7cLo-EdeMV1194DHTVevUcvBI";
+const SB_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const AUTH_HASH = import.meta.env.VITE_AUTH_HASH || "7fbf06ff12224e8400ef7a271af53710966fdbdf5af200c10012494f46c78a3c";
 
 const H = { "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation" };
 
@@ -21,13 +22,52 @@ async function db(table, opts = {}) {
 /* ═══════════════════════════════════════════════════════════════
    AUTH
 ═══════════════════════════════════════════════════════════════ */
-const AUTH_KEY = "1204inv_auth";
-const ADMIN_PW = "1204invoice2026";
+const AUTH_KEY  = "1204inv_auth";
+const SESSION_TTL = 8 * 60 * 60 * 1000;
+const _inv = { count:0, firstAt:0, lockUntil:0 };
+
+async function hashPw(pw) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
 function useAuth() {
-  const [ok, setOk] = useState(() => sessionStorage.getItem(AUTH_KEY) === "true");
-  const login  = pw => { if (pw === ADMIN_PW) { sessionStorage.setItem(AUTH_KEY, "true"); setOk(true); return true; } return false; };
-  const logout = ()  => { sessionStorage.removeItem(AUTH_KEY); setOk(false); };
-  return { ok, login, logout };
+  const [ok, setOk] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(AUTH_KEY);
+      if (!raw) return false;
+      const { ts } = JSON.parse(raw);
+      const valid = ts && (Date.now() - ts) < SESSION_TTL;
+      if (!valid) sessionStorage.removeItem(AUTH_KEY);
+      return valid;
+    } catch { sessionStorage.removeItem(AUTH_KEY); return false; }
+  });
+  const [lockMsg, setLockMsg] = useState("");
+
+  const login = async (pw) => {
+    const now = Date.now();
+    if (now < _inv.lockUntil) {
+      setLockMsg(`Too many attempts. Wait ${Math.ceil((_inv.lockUntil-now)/1000)}s.`);
+      return false;
+    }
+    if (now - _inv.firstAt > 15*60*1000) { _inv.count=0; _inv.firstAt=now; }
+    if (_inv.count >= 5) {
+      _inv.lockUntil = now + 15*60*1000; _inv.count=0;
+      setLockMsg("Locked for 15 minutes."); return false;
+    }
+    _inv.count++;
+    const hash = await hashPw(pw);
+    if (hash === AUTH_HASH) {
+      _inv.count=0; _inv.lockUntil=0; setLockMsg("");
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify({ts:Date.now()}));
+      setOk(true); return true;
+    }
+    setLockMsg(`Incorrect password. ${5-_inv.count} attempt(s) remaining.`);
+    return false;
+  };
+
+  const logout = () => { sessionStorage.removeItem(AUTH_KEY); setOk(false); };
+  return { ok, login, logout, lockMsg };
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -746,11 +786,12 @@ function Field({ label, children, span }) {
 /* ═══════════════════════════════════════════════════════════════
    LOGIN
 ═══════════════════════════════════════════════════════════════ */
-function Login({ login }) {
+function Login({ login, lockMsg }) {
   const [pw, setPw] = useState(""); const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
   const submit = async () => {
     setLoading(true); setErr(""); await new Promise(r=>setTimeout(r,400));
-    if (!login(pw)) setErr("Incorrect password.");
+    const ok = await login(pw);
+    if (!ok) setErr(lockMsg || "Incorrect password.");
     setLoading(false);
   };
   return (
@@ -1861,7 +1902,7 @@ function AdminLayout({ logout, store, update, settings, setSettings }) {
 }
 
 export default function App() {
-  const { ok, login, logout } = useAuth();
+  const { ok, login, logout, lockMsg } = useAuth();
   const { store, update } = useStore();
   const [settings, setSettingsState] = useState(() => loadSettings());
 
@@ -1882,7 +1923,7 @@ export default function App() {
     }
   }, []);
 
-  if (!ok) return <><Styles /><Login login={login} /></>;
+  if (!ok) return <><Styles /><Login login={login} lockMsg={lockMsg} /></>;
 
   return (
     <BrowserRouter>
